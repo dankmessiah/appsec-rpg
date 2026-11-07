@@ -1,0 +1,74 @@
+# ZAP Automation Framework plan: nightly authenticated full + API scan against homelab staging.
+# Run by .github/workflows/dast-nightly.yml once per user (alice, then bob).
+# Env vars (set by the workflow, never committed):
+#   TARGET       e.g. http://10.0.0.50:3000
+#   SID          session cookie value from POST /api/v1/auth/login
+#   CSRF         X-CSRF-Token value from the same login
+#   SCAN_USER    alice | bob (report folder name)
+env:
+  contexts:
+    - name: appsec-rpg
+      urls:
+        - ${TARGET}
+      includePaths:
+        - ${TARGET}.*
+      excludePaths:
+        # Keep the session alive: never log out or re-login mid-scan.
+        - ${TARGET}/api/v1/auth/logout.*
+        - ${TARGET}/api/v1/auth/login.*
+        # Admin CRUD is out of scope for player scans (and would mutate the term bank).
+        - ${TARGET}/api/v1/admin/.*
+  parameters:
+    failOnError: true
+    progressToStdout: true
+
+jobs:
+  # Session handling: inject the player's cookie and CSRF header into every request.
+  - type: replacer
+    parameters:
+      deleteAllRules: true
+    rules:
+      - description: session cookie
+        matchType: req_header
+        matchString: Cookie
+        replacementString: sid=${SID}
+      - description: csrf header
+        matchType: req_header
+        matchString: X-CSRF-Token
+        replacementString: ${CSRF}
+
+  # API scan: import every endpoint from the spec served with the app.
+  - type: openapi
+    parameters:
+      apiFile: /zap/wrk/openapi.yaml
+      targetUrl: ${TARGET}
+      context: appsec-rpg
+
+  # Full scan: crawl the browser front end too.
+  - type: spider
+    parameters:
+      context: appsec-rpg
+      maxDuration: 5
+
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+
+  - type: activeScan
+    parameters:
+      context: appsec-rpg
+      maxRuleDurationInMins: 2
+      maxScanDurationInMins: 45
+      # Keep load reasonable on a homelab LXC.
+      threadPerHost: 4
+
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk/reports/${SCAN_USER}
+      reportFile: zap-${SCAN_USER}.json
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: /zap/wrk/reports/${SCAN_USER}
+      reportFile: zap-${SCAN_USER}.html

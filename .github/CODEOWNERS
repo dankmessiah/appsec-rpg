@@ -1,0 +1,16 @@
+# Owners are used by the n8n enrichment step (docs/lab/) to route findings.
+# Last matching pattern wins.
+
+*                    @dankmessiah
+
+# Application code (game session)
+/server/             @dankmessiah
+/shared/             @dankmessiah
+/public/             @dankmessiah
+/db/                 @dankmessiah
+
+# Pipeline and lab (AppSec program)
+/.github/            @dankmessiah
+/semgrep/            @dankmessiah
+/.zap/               @dankmessiah
+/docs/lab/           @dankmessiah

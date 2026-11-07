@@ -1,0 +1,8 @@
+# Replaces Semgrep's default ignore list, so the defaults are repeated here.
+:include .gitignore
+node_modules/
+coverage/
+dist/
+*.min.js
+# Rule test fixtures contain deliberate vulnerabilities.
+semgrep/
