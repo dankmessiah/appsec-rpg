@@ -13,7 +13,7 @@ Build the interview-prep lab described below against this repo (`dankmessiah/app
 - **Homelab:** Proxmox host (reachable via the Proxmox MCP tools in Claude). Wazuh is the SIEM. Firewalla fronts the LAN. 1Password holds secrets; use it for anything local, GitHub Actions secrets for anything in CI.
 - **Automation platform:** Nunzio's self-hosted n8n instance, connected as the `n8n-mcp` MCP server. All automation lives there: the finding → enrich → route → Jira/SIEM flow and any internal glue (runner health, nightly scan kick-off). Do not use Tines (its free tier is too limited). Build workflows through the n8n-mcp tools and follow the repo's `n8n-automation` skill if listed. In the interview Nunzio presents the n8n flows as the SOAR layer and explains how the same design maps to Tines, which he already knows well.
 - **Ticketing:** Jira free tier. Create a project key `APPSEC`.
-- **Chat alerts:** Slack (a personal workspace is fine).
+- **Chat alerts:** Discord (a personal server with an `#appsec-alerts` channel; use a webhook or the n8n Discord node).
 - **Staging target:** the game's Docker Compose stack on a Proxmox LXC or VM, LAN-only, `http://<lan-ip>:3000`. Postgres is not published. Seeded users `alice`, `bob`, `admin` with passwords from `.env`.
 - **Self-hosted GitHub runner:** install one on the homelab (its own LXC) for scans against staging. Label it `homelab`.
 
@@ -23,7 +23,7 @@ Do these first; none depend on application code:
 1. Repo hygiene: `.gitignore`, `CODEOWNERS` (map `server/` and `shared/` to `@dankmessiah`, `docs/lab/` to the lab), branch protection on `main` requiring the security workflow and `npm test`.
 2. Fork Juice Shop and get its full pipeline (SAST, secrets, SCA, ZAP baseline) green. This is where you learn the tooling and collect real findings.
 3. Set up the self-hosted runner on Proxmox and verify a trivial workflow runs on it.
-4. Confirm n8n is reachable through `n8n-mcp`; set up Jira and Slack. Build the Week 2 workflows in n8n against Juice Shop output.
+4. Confirm n8n is reachable through `n8n-mcp`; set up Jira and Discord. Build the Week 2 workflows in n8n against Juice Shop output.
 5. Write the runbook and RACI.
 6. Scaffold `security.yml` for `appsec-rpg` with every job present but path filters so jobs no-op cleanly until the directories exist.
 
@@ -69,7 +69,7 @@ Juice Shop is the calibration target; `appsec-rpg` is the production-like one.
 1. Send scanner output (SARIF or JSON) via webhook into an n8n workflow (`appsec-ingest`).
 2. Enrich each finding: mock owner (from a CODEOWNERS file), app tier, exposure.
 3. Dedupe on rule + file + line (SAST) or rule + URL + param (DAST).
-4. Route: every finding to a Jira ticket (free tier) with an SLA date by severity; critical findings also to a Wazuh event (homelab SIEM) and a Slack message. Export the finished n8n workflows as JSON into `docs/lab/n8n/`.
+4. Route: every finding to a Jira ticket (free tier) with an SLA date by severity; critical findings also to a Wazuh event (homelab SIEM) and a Discord message. Export the finished n8n workflows as JSON into `docs/lab/n8n/`.
 5. Write `docs/lab/runbook-exposed-secret.md` and `docs/lab/raci.md`.
 6. Capture screenshots of each stage into `docs/lab/screenshots/`.
 
