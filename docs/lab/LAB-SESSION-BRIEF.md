@@ -2,6 +2,44 @@
 
 Build the interview-prep lab described below against this repo (`dankmessiah/appsec-rpg`) and a second target, OWASP Juice Shop. This repo is a Node/Express + PostgreSQL game with accounts, a REST API (`openapi.yaml`), an admin role, and Docker Compose deployment on the homelab; its design spec is at `docs/superpowers/specs/2026-11-07-appsec-rpg-design.md`. Treat the game as a real product being onboarded to an AppSec program: scanning must run on every PR without slowing the game's development.
 
+## Context
+
+- **Why this exists.** Nunzio is interviewing for an Application Security role whose first job is to select and stand up a SAST/DAST program, onboard dev teams, and hand operational alerts to Security Operations. He is a SecOps analyst (SOC, IR, CrowdStrike NG-SIEM, Splunk, Entra/Okta) and a top-1% Tines builder; he has not run an AppSec program before. This lab is his hands-on evidence for the interview. Every artifact should be something he can screenshot and walk an interviewer through in five minutes.
+- **The interview story.** "I run AppSec like a detection pipeline: high-signal findings, automated routing to owners, a runbook-backed SOC handoff." The handoff (Week 2) is the differentiator; don't shortchange it.
+- **The game is being built in a separate Claude session at the same time.** Its code lands in `server/`, `shared/`, `public/`, `db/`, `tests/`, plus `Dockerfile`, `docker-compose.yml` and `openapi.yaml`. Until it exists, build what you can (see Starting order) and design the rest against the spec.
+
+## Environment facts
+
+- **Homelab:** Proxmox host (reachable via the Proxmox MCP tools in Claude). Wazuh is the SIEM. Firewalla fronts the LAN. 1Password holds secrets; use it for anything local, GitHub Actions secrets for anything in CI.
+- **Automation platform:** Tines (community edition) for the SOC-handoff flows, because Tines is the interview story. Nunzio also runs a self-hosted n8n instance (connected as the `n8n-mcp` MCP server); use it for any internal glue (e.g. runner health, nightly scan kick-off) where it's faster, but the finding → enrich → route → Jira/SIEM flow lives in Tines.
+- **Ticketing:** Jira free tier. Create a project key `APPSEC`.
+- **Chat alerts:** Slack (a personal workspace is fine).
+- **Staging target:** the game's Docker Compose stack on a Proxmox LXC or VM, LAN-only, `http://<lan-ip>:3000`. Postgres is not published. Seeded users `alice`, `bob`, `admin` with passwords from `.env`.
+- **Self-hosted GitHub runner:** install one on the homelab (its own LXC) for scans against staging. Label it `homelab`.
+
+## Starting order (app code does not exist yet)
+
+Do these first; none depend on application code:
+1. Repo hygiene: `.gitignore`, `CODEOWNERS` (map `server/` and `shared/` to `@dankmessiah`, `docs/lab/` to the lab), branch protection on `main` requiring the security workflow and `npm test`.
+2. Fork Juice Shop and get its full pipeline (SAST, secrets, SCA, ZAP baseline) green. This is where you learn the tooling and collect real findings.
+3. Set up the self-hosted runner on Proxmox and verify a trivial workflow runs on it.
+4. Stand up Tines, Jira and Slack. Build the Week 2 flows against Juice Shop output.
+5. Write the runbook and RACI.
+6. Scaffold `security.yml` for `appsec-rpg` with every job present but path filters so jobs no-op cleanly until the directories exist.
+
+Then, once the game session has merged a runnable app with `Dockerfile` and `docker-compose.yml`:
+7. Turn on the full `appsec-rpg` pipeline, deploy staging on the homelab, and complete Weeks 1 and 3 against the game.
+
+## Working rules
+
+- Follow the repo's superpowers flow: brainstorm → written plan → implement. Write the plan to `docs/superpowers/plans/` before building the pipeline.
+- Work on branches named `lab/<topic>`; open PRs to `main`; squash-merge. Never commit directly to `main`.
+- Do not edit application code (`server/`, `shared/`, `public/`, `db/`, `tests/`), `Dockerfile`, `docker-compose.yml` or `openapi.yaml`. If the pipeline needs an app change (a test endpoint, a health check tweak), open an issue describing it for the game session instead.
+- Deliberate vulnerabilities for detection demos go on branches named `demo/<vuln>` and are never merged.
+- Commit messages: imperative, one line, body optional.
+- Keep every lab doc under `docs/lab/`. Screenshots under `docs/lab/screenshots/` named `<week>-<step>-<what>.png`.
+- When a tool has a free tier and a paid tier, use the free tier; stop and ask before anything that costs money.
+
 ## Why two targets
 
 | Target | Gives you |
@@ -43,11 +81,10 @@ Juice Shop is the calibration target; `appsec-rpg` is the production-like one.
 5. Draft the 30/60/90 plan and tool evaluation matrix in `docs/lab/`.
 
 ## Constraints
-- Never commit real credentials. Use GitHub Actions secrets and Tines credentials.
+- Never commit real credentials. Use GitHub Actions secrets, Tines credentials and 1Password.
 - Pipeline on `appsec-rpg` must finish in under 5 minutes on PR.
-- Do not modify application code under `server/`, `shared/` or `public/` in the lab session except to seed a deliberate, clearly marked test vulnerability on a branch for demonstrating detection; never merge that branch.
-- The homelab staging instance is LAN-only. Scheduled scans against it must run from a self-hosted runner on the homelab, never from GitHub-hosted runners.
-- Keep all lab docs under `docs/lab/`.
+- The homelab staging instance is LAN-only. Scheduled scans against it must run from the `homelab` self-hosted runner, never from GitHub-hosted runners.
+- Scanner traffic must be identifiable: dedicated User-Agent `appsec-lab-scanner` so the SIEM can suppress or tag it.
 
 ## Done when
 - A PR to `appsec-rpg` shows Semgrep, Gitleaks and CodeQL results in the Security tab within 5 minutes.
