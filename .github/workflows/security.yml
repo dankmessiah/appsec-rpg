@@ -1,0 +1,359 @@
+# AppSec pipeline for appsec-rpg. Week 1: warn-only (scanners never fail the build).
+# Design and decisions: docs/superpowers/plans/2026-11-07-lab-week1-pipeline.md
+#
+# Repo variables:
+#   SARIF goes to the Security tab automatically when the repo is public.
+#   CODE_SCANNING_ENABLED=true  forces it on a private repo with GitHub Code Security.
+name: security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SEMGREP_IMAGE: semgrep/semgrep:1.184.0@sha256:cc1b68266f267878b39739373ea9985b9a78e5d64497dd875c8de100b22695ed
+  GITLEAKS_IMAGE: zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+  TRIVY_VERSION: v0.70.0
+  SCANNER_UA: appsec-lab-scanner
+
+jobs:
+  # Decides which jobs have something to scan. Lets the pipeline exist before the app does.
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      node: ${{ steps.d.outputs.node }}
+      lockfile: ${{ steps.d.outputs.lockfile }}
+      js: ${{ steps.d.outputs.js }}
+      dockerfile: ${{ steps.d.outputs.dockerfile }}
+      compose: ${{ steps.d.outputs.compose }}
+      openapi: ${{ steps.d.outputs.openapi }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: d
+        run: |
+          has() { [ -e "$1" ] && echo true || echo false; }
+          {
+            echo "node=$(has package.json)"
+            echo "lockfile=$(has package-lock.json)"
+            echo "dockerfile=$(has Dockerfile)"
+            echo "compose=$(has docker-compose.yml)"
+            echo "openapi=$(has openapi.yaml)"
+            if git ls-files '*.js' '*.mjs' '*.cjs' | grep -q .; then echo "js=true"; else echo "js=false"; fi
+          } | tee -a "$GITHUB_OUTPUT"
+
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Semgrep scan
+        continue-on-error: true
+        run: |
+          local_rules=()
+          [ -d .semgrep ] && local_rules=(--config /src/.semgrep/)
+          docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE" \
+            semgrep scan --metrics=off --disable-version-check \
+              --config p/owasp-top-ten --config p/javascript --config p/nodejs --config p/docker \
+              "${local_rules[@]}" \
+              --sarif --output /src/semgrep.sarif
+      - name: Summarise
+        if: always()
+        run: .github/scripts/sarif-summary.sh semgrep.sarif Semgrep >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload SARIF to Security tab
+        if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sarif-semgrep
+          path: semgrep.sarif
+          if-no-files-found: warn
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Gitleaks (full history)
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+            "$GITLEAKS_IMAGE" git /repo --redact --no-banner --exit-code 0 \
+              --report-format sarif --report-path /repo/gitleaks.sarif
+      - name: Summarise
+        if: always()
+        run: .github/scripts/sarif-summary.sh gitleaks.sarif Gitleaks >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload SARIF to Security tab
+        if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('gitleaks.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sarif-gitleaks
+          path: gitleaks.sarif
+          if-no-files-found: warn
+
+  codeql:
+    needs: detect
+    if: needs.detect.outputs.js == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+      - name: Analyze
+        continue-on-error: true
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: codeql-js
+          upload: ${{ (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && 'always' || 'never' }}
+          output: codeql-results
+      - name: Summarise
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in codeql-results/*.sarif; do .github/scripts/sarif-summary.sh "$f" CodeQL; done >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sarif-codeql
+          path: codeql-results/
+          if-no-files-found: warn
+
+  trivy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Trivy fs (npm dependencies)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: sarif
+          output: trivy-fs.sarif
+          exit-code: "0"
+      - name: Trivy config (Dockerfile, docker-compose.yml)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          exit-code: "0"
+      - name: CycloneDX SBOM
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: sbom.cdx.json
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            .github/scripts/sarif-summary.sh trivy-fs.sarif "Trivy fs (SCA)"
+            .github/scripts/sarif-summary.sh trivy-config.sarif "Trivy config (IaC)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload fs SARIF
+        if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('trivy-fs.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+      - name: Upload config SARIF
+        if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('trivy-config.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sarif-trivy
+          path: |
+            trivy-fs.sarif
+            trivy-config.sarif
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cdx.json
+          if-no-files-found: warn
+
+  container:
+    needs: detect
+    if: needs.detect.outputs.dockerfile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build -t appsec-rpg:ci .
+      - name: Trivy image
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          scan-type: image
+          image-ref: appsec-rpg:ci
+          format: sarif
+          output: trivy-image.sarif
+          exit-code: "0"
+      - name: Summarise
+        if: always()
+        run: .github/scripts/sarif-summary.sh trivy-image.sarif "Trivy image" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload SARIF
+        if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('trivy-image.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sarif-trivy-image
+          path: trivy-image.sarif
+          if-no-files-found: warn
+
+  # Required check. Not warn-only: a failing test is a failing build.
+  test:
+    needs: detect
+    if: needs.detect.outputs.node == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rpg
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: rpg_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rpg" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://rpg:ci-only-not-a-secret@localhost:5432/rpg_test
+      SESSION_SECRET: ci-only-not-a-secret
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: ${{ needs.detect.outputs.lockfile == 'true' && 'npm' || '' }}
+      - run: npm ci --ignore-scripts
+        if: needs.detect.outputs.lockfile == 'true'
+      - run: npm install --ignore-scripts
+        if: needs.detect.outputs.lockfile != 'true'
+      - run: npm test
+
+  # ZAP baseline (passive) against the stack built from this PR.
+  dast-baseline:
+    needs: detect
+    if: needs.detect.outputs.compose == 'true' && needs.detect.outputs.dockerfile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Throwaway .env for CI
+        run: |
+          rnd() { openssl rand -hex 16; }
+          pg=$(rnd)
+          cat > .env <<EOF
+          PORT=3000
+          NODE_ENV=production
+          POSTGRES_USER=rpg
+          POSTGRES_PASSWORD=$pg
+          POSTGRES_DB=rpg
+          DATABASE_URL=postgres://rpg:$pg@postgres:5432/rpg
+          SESSION_SECRET=$(rnd)
+          SEED_ALICE_PASSWORD=$(rnd)
+          SEED_BOB_PASSWORD=$(rnd)
+          SEED_ADMIN_PASSWORD=$(rnd)
+          EOF
+          sed -i 's/^ *//' .env
+      - name: Start stack
+        run: docker compose up -d --build --wait --wait-timeout 120
+      - name: Seed
+        continue-on-error: true
+        run: docker compose exec -T app npm run seed
+      - name: ZAP baseline
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: http://localhost:3000
+          docker_name: ${{ env.ZAP_IMAGE }}
+          rules_file_name: .zap/rules.tsv
+          cmd_options: -a -m 2 -T 3 -z "-config connection.defaultUserAgent=appsec-lab-scanner"
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-baseline
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose logs --no-color | tail -200
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v
