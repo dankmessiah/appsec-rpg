@@ -1,0 +1,61 @@
+{
+  "source": {
+    "repo": "dankmessiah/appsec-rpg",
+    "ref": "refs/heads/demo/seeded-secret",
+    "sha": "abc123",
+    "runUrl": "https://github.com/dankmessiah/appsec-rpg/actions/runs/1",
+    "tool": "gitleaks"
+  },
+  "findings": [
+    {
+      "tool": "bola-check",
+      "rule": "bola-battle-answer",
+      "severity": "high",
+      "url": "http://10.0.0.50:3000/api/v1/battles/b3/answer",
+      "method": "POST",
+      "param": "id",
+      "message": "bob (non-owner) got HTTP 200 acting on alice's battle"
+    }
+  ],
+  "sarif": {
+    "version": "2.1.0",
+    "runs": [
+      {
+        "tool": {
+          "driver": {
+            "name": "gitleaks",
+            "rules": [
+              {
+                "id": "github-pat",
+                "shortDescription": {
+                  "text": "GitHub Personal Access Token"
+                }
+              }
+            ]
+          }
+        },
+        "results": [
+          {
+            "ruleId": "github-pat",
+            "level": "error",
+            "message": {
+              "text": "github-pat has detected secret for file server/config.js."
+            },
+            "locations": [
+              {
+                "physicalLocation": {
+                  "artifactLocation": {
+                    "uri": "server/config.js"
+                  },
+                  "region": {
+                    "startLine": 3
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,398 @@
+{
+  "name": "AppSec RPG - appsec-ingest",
+  "_exported": "2026-11-07 from n8n workflow DzZy8fLAZaSiPs0N. Credentials scrubbed: each node names the credential TYPE it needs; re-select your own after import.",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "appsec-rpg",
+    "appsec-lab"
+  ],
+  "nodes": [
+    {
+      "name": "Receive Scanner Findings",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "appsec-ingest",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "<AppSec ingest token>"
+        }
+      }
+    },
+    {
+      "name": "Normalize Findings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        128
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Ingest: turn one webhook payload (SARIF, ZAP JSON or lab JSON findings) into one item per finding.\n// Payload contract (sent by CI / homelab runner):\n// { source: { repo, ref, sha, runUrl, tool }, sarif?: <SARIF 2.1.0>, zap?: <ZAP traditional-json>, findings?: [<flat finding>] }\nconst out = [];\nconst sevFromScore = function (s) {\n  const v = parseFloat(s);\n  if (isNaN(v)) return null;\n  if (v >= 9) return 'critical';\n  if (v >= 7) return 'high';\n  if (v >= 4) return 'medium';\n  return 'low';\n};\nconst sevFromLevel = { error: 'high', warning: 'medium', note: 'low', none: 'low' };\nconst zapRisk = { '3': 'high', '2': 'medium', '1': 'low', '0': 'info' };\n\nfor (const item of $input.all()) {\n  const body = item.json.body || item.json;\n  const src = body.source || {};\n  const base = { repo: src.repo || 'unknown', ref: src.ref || '', sha: src.sha || '', runUrl: src.runUrl || '', receivedAt: new Date().toISOString() };\n\n  if (body.sarif && Array.isArray(body.sarif.runs)) {\n    for (const run of body.sarif.runs) {\n      const tool = ((run.tool || {}).driver || {}).name || src.tool || 'sarif';\n      const rules = {};\n      for (const r of (((run.tool || {}).driver || {}).rules || [])) rules[r.id] = r;\n      for (const res of (run.results || [])) {\n        const rule = rules[res.ruleId] || {};\n        const props = rule.properties || {};\n        const loc = (((res.locations || [])[0] || {}).physicalLocation) || {};\n        const tags = (props.tags || []).join(' ').toLowerCase();\n        const isSecret = /gitleaks|trufflehog|secret/i.test(tool) || tags.indexOf('secret') >= 0;\n        let severity = sevFromScore(props['security-severity']) || sevFromLevel[res.level || 'warning'] || 'medium';\n        if (isSecret) severity = 'critical';\n        out.push({ json: Object.assign({}, base, {\n          kind: isSecret ? 'secret' : 'sast',\n          tool: tool,\n          rule: res.ruleId || 'unknown',\n          title: (rule.shortDescription && rule.shortDescription.text) || res.ruleId,\n          message: ((res.message || {}).text || '').slice(0, 1500),\n          severity: severity,\n          confidence: String(props.confidence || props.precision || 'unknown').toLowerCase(),\n          file: ((loc.artifactLocation || {}).uri) || '',\n          line: ((loc.region || {}).startLine) || 0,\n          url: '', param: ''\n        }) });\n      }\n    }\n  }\n\n  if (body.zap && Array.isArray(body.zap.site)) {\n    for (const site of body.zap.site) {\n      for (const alert of (site.alerts || [])) {\n        const sev = zapRisk[String(alert.riskcode)] || 'low';\n        if (sev === 'info') continue;\n        for (const inst of (alert.instances || [{}])) {\n          out.push({ json: Object.assign({}, base, {\n            kind: 'dast', tool: 'zap', rule: 'zap-' + alert.pluginid,\n            title: alert.name || alert.alert,\n            message: String(alert.desc || '').replace(/<[^>]+>/g, '').slice(0, 1500),\n            severity: sev,\n            confidence: ({ '3': 'high', '2': 'medium', '1': 'low' })[String(alert.confidence)] || 'unknown',\n            file: '', line: 0,\n            url: inst.uri || site['@name'] || '', param: inst.param || '', method: inst.method || ''\n          }) });\n        }\n      }\n    }\n  }\n\n  for (const f of (body.findings || [])) {\n    out.push({ json: Object.assign({}, base, {\n      kind: f.kind || (f.url ? 'dast' : 'sast'), tool: f.tool || src.tool || 'custom',\n      rule: f.rule || 'unknown', title: f.title || f.rule, message: f.message || '',\n      severity: String(f.severity || 'medium').toLowerCase(), confidence: f.confidence || 'high',\n      file: f.file || '', line: f.line || 0, url: f.url || '', param: f.param || '', method: f.method || ''\n    }) });\n  }\n}\nreturn out;\n"
+      }
+    },
+    {
+      "name": "Enrich Owner Tier Exposure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        128
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Enrich: owner (mock CODEOWNERS), app tier, exposure, SLA due date, dedupe key.\n// CODEOWNERS is mirrored here as a mock; last matching pattern wins, same as GitHub.\nconst codeowners = {\n  'dankmessiah/appsec-rpg': [\n    { pattern: '', owner: '@dankmessiah' },\n    { pattern: 'server/', owner: '@game-backend' },\n    { pattern: 'shared/', owner: '@game-backend' },\n    { pattern: 'db/', owner: '@game-backend' },\n    { pattern: 'public/', owner: '@game-frontend' },\n    { pattern: '.github/', owner: '@platform' },\n    { pattern: 'Dockerfile', owner: '@platform' },\n    { pattern: 'docker-compose.yml', owner: '@platform' }\n  ],\n  'dankmessiah/juice-shop': [\n    { pattern: '', owner: '@juice-maintainers' },\n    { pattern: 'routes/', owner: '@juice-backend' },\n    { pattern: 'lib/', owner: '@juice-backend' },\n    { pattern: 'frontend/', owner: '@juice-frontend' }\n  ]\n};\nconst apps = {\n  'dankmessiah/appsec-rpg': { tier: 1, exposure: 'lan-staging', dataClass: 'user-accounts' },\n  'dankmessiah/juice-shop': { tier: 3, exposure: 'ci-only', dataClass: 'none (calibration)' }\n};\nconst slaDays = { critical: 7, high: 30, medium: 90, low: 180 };\nconst jiraPriority = { critical: 'Highest', high: 'High', medium: 'Medium', low: 'Low' };\n\nreturn $input.all().map(function (item) {\n  const f = item.json;\n  const rules = codeowners[f.repo] || [{ pattern: '', owner: '@appsec-triage' }];\n  let owner = rules[0].owner;\n  for (const rule of rules) {\n    if (rule.pattern === '' || (f.file || '').replace(/^\\.?\\//, '').indexOf(rule.pattern) === 0) owner = rule.owner;\n  }\n  if (f.kind === 'dast') owner = f.repo === 'dankmessiah/appsec-rpg' ? '@game-backend' : owner;\n  const app = apps[f.repo] || { tier: 3, exposure: 'unknown', dataClass: 'unknown' };\n  let severity = f.severity;\n  // Exposure bump: Tier 1 + reachable + high-confidence High becomes Critical for routing.\n  if (app.tier === 1 && severity === 'high' && f.confidence === 'high' && f.kind !== 'sast') severity = 'critical';\n  const due = new Date(Date.now() + (slaDays[severity] || 180) * 86400000).toISOString().slice(0, 10);\n  const dedupeKey = (f.kind === 'dast')\n    ? [f.repo, f.rule, (f.url || '').split('?')[0], f.param || ''].join('|')\n    : [f.repo, f.rule, f.file, f.line].join('|');\n  return { json: Object.assign({}, f, {\n    severity: severity, owner: owner, tier: app.tier, exposure: app.exposure, dataClass: app.dataClass,\n    slaDays: slaDays[severity] || 180, dueDate: due, jiraPriority: jiraPriority[severity] || 'Low',\n    dedupeKey: dedupeKey,\n    runbook: f.kind === 'secret' ? 'https://github.com/dankmessiah/appsec-rpg/blob/main/docs/lab/runbook-exposed-secret.md' : ''\n  }) };\n});\n"
+      }
+    },
+    {
+      "name": "Drop Already-Ticketed Findings",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        128
+      ],
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "logic": "removeItemsWithAlreadySeenKeyValues",
+        "dedupeValue": "={{ $json.dedupeKey }}",
+        "options": {
+          "scope": "node",
+          "historySize": 10000
+        }
+      }
+    },
+    {
+      "name": "Create APPSEC Jira Ticket",
+      "type": "n8n-nodes-base.jira",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        224
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "resource": "issue",
+        "operation": "create",
+        "jiraVersion": "cloud",
+        "project": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "APPSEC"
+        },
+        "issueType": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Bug"
+        },
+        "summary": "=[{{ $json.severity.toUpperCase() }}] {{ $json.title }} ({{ $json.tool }}) in {{ $json.repo }}",
+        "additionalFields": {
+          "description": "=*Severity:* {{ $json.severity }} | *SLA due:* {{ $json.dueDate }} ({{ $json.slaDays }} days)\n*Owner:* {{ $json.owner }} | *Tier:* {{ $json.tier }} | *Exposure:* {{ $json.exposure }} | *Data:* {{ $json.dataClass }}\n*Tool / rule:* {{ $json.tool }} / {{ $json.rule }} (confidence {{ $json.confidence }})\n*Location:* {{ $json.file ? $json.file + \":\" + $json.line : ($json.method || \"\") + \" \" + $json.url + ($json.param ? \" param=\" + $json.param : \"\") }}\n*Commit:* {{ $json.sha }} | *Run:* {{ $json.runUrl }}\n{{ $json.runbook ? \"*Runbook:* \" + $json.runbook : \"\" }}\n\n{{ $json.message }}\n\n_Dedupe key:_ {{ $json.dedupeKey }}",
+          "labels": [
+            "appsec",
+            "scanner-finding"
+          ]
+        }
+      },
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "name": "<Jira APPSEC>"
+        }
+      }
+    },
+    {
+      "name": "Is Critical?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        128
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Enrich Owner Tier Exposure').item.json.severity }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "critical"
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "name": "Alert #appsec-alerts",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        2304,
+        128
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "authentication": "botToken",
+        "guildId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sendTo": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "appsec-alerts"
+        },
+        "content": "=:rotating_light: **CRITICAL {{ $(\"Enrich Owner Tier Exposure\").item.json.kind.toUpperCase() }}** {{ $(\"Enrich Owner Tier Exposure\").item.json.title }}\nRepo: {{ $(\"Enrich Owner Tier Exposure\").item.json.repo }} | Owner: {{ $(\"Enrich Owner Tier Exposure\").item.json.owner }} | Due: {{ $(\"Enrich Owner Tier Exposure\").item.json.dueDate }}\nWhere: {{ $(\"Enrich Owner Tier Exposure\").item.json.file || $(\"Enrich Owner Tier Exposure\").item.json.url }}\nJira: {{ $(\"Create APPSEC Jira Ticket\").item.json.key }}{{ $(\"Enrich Owner Tier Exposure\").item.json.runbook ? \"\\nRunbook: \" + $(\"Enrich Owner Tier Exposure\").item.json.runbook : \"\" }}"
+      },
+      "credentials": {
+        "discordBotApi": {
+          "name": "<Discord AppSec bot>"
+        }
+      }
+    },
+    {
+      "name": "Get Wazuh API Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2528,
+        128
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.home.arpa:55000/security/user/authenticate?raw=true",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "token"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpBasicAuth": {
+          "name": "<Wazuh API user>"
+        }
+      }
+    },
+    {
+      "name": "Send Wazuh Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2752,
+        128
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://wazuh.home.arpa:55000/events",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ events: [ JSON.stringify({ appsec_lab: true, source: \"n8n-appsec-ingest\", severity: $(\"Enrich Owner Tier Exposure\").item.json.severity, kind: $(\"Enrich Owner Tier Exposure\").item.json.kind, tool: $(\"Enrich Owner Tier Exposure\").item.json.tool, rule: $(\"Enrich Owner Tier Exposure\").item.json.rule, repo: $(\"Enrich Owner Tier Exposure\").item.json.repo, owner: $(\"Enrich Owner Tier Exposure\").item.json.owner, location: $(\"Enrich Owner Tier Exposure\").item.json.file || $(\"Enrich Owner Tier Exposure\").item.json.url, jira: $(\"Create APPSEC Jira Ticket\").item.json.key, runbook: $(\"Enrich Owner Tier Exposure\").item.json.runbook }) ] }) }}"
+      }
+    },
+    {
+      "name": "Alert Jira Ticket Failed",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        320
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "authentication": "botToken",
+        "guildId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sendTo": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "appsec-alerts"
+        },
+        "content": "=:warning: appsec-ingest could not create a Jira ticket for {{ $(\"Enrich Owner Tier Exposure\").item.json.dedupeKey }} ({{ $(\"Enrich Owner Tier Exposure\").item.json.severity }}). Error: {{ JSON.stringify($json).slice(0, 300) }}. Execution {{ $execution.id }}."
+      },
+      "credentials": {
+        "discordBotApi": {
+          "name": "<Discord AppSec bot>"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Receive Scanner Findings": {
+      "main": [
+        [
+          {
+            "node": "Normalize Findings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Findings": {
+      "main": [
+        [
+          {
+            "node": "Enrich Owner Tier Exposure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Owner Tier Exposure": {
+      "main": [
+        [
+          {
+            "node": "Drop Already-Ticketed Findings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drop Already-Ticketed Findings": {
+      "main": [
+        [
+          {
+            "node": "Create APPSEC Jira Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create APPSEC Jira Ticket": {
+      "main": [
+        [
+          {
+            "node": "Is Critical?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Jira Ticket Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Critical?": {
+      "main": [
+        [
+          {
+            "node": "Alert #appsec-alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert #appsec-alerts": {
+      "main": [
+        [
+          {
+            "node": "Get Wazuh API Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Wazuh API Token": {
+      "main": [
+        [
+          {
+            "node": "Send Wazuh Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [
+    {
+      "name": "1 Ingest",
+      "nodeNames": [
+        "Normalize Findings"
+      ]
+    },
+    {
+      "name": "2 Enrich",
+      "nodeNames": [
+        "Enrich Owner Tier Exposure"
+      ]
+    },
+    {
+      "name": "3 Dedupe",
+      "nodeNames": [
+        "Drop Already-Ticketed Findings"
+      ]
+    },
+    {
+      "name": "4 Route",
+      "nodeNames": [
+        "Create APPSEC Jira Ticket",
+        "Alert Jira Ticket Failed",
+        "Is Critical?",
+        "Alert #appsec-alerts",
+        "Get Wazuh API Token",
+        "Send Wazuh Event"
+      ]
+    }
+  ]
+}

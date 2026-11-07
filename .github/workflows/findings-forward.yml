@@ -1,0 +1,48 @@
+# Week 2 SOC handoff: forwards scanner output to the n8n appsec-ingest workflow.
+# n8n is LAN-only, so this runs on the homelab self-hosted runner after the scan workflows finish.
+#
+# Repo variables: HOMELAB_RUNNER_READY=true, N8N_INGEST_URL=https://n8n.home.arpa/webhook/appsec-ingest
+# Repo secrets:   N8N_INGEST_TOKEN (same value as the n8n "AppSec ingest token" Header Auth credential)
+# Runner:         trusts the Caddy root CA, or set variable N8N_CA_FILE to its path on the runner.
+name: findings-forward
+
+on:
+  workflow_run:
+    workflows: [security, dast-nightly]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  forward:
+    # Only runs from this repo's own branches (never fork PR artifacts) and only once the runner exists.
+    if: >-
+      vars.HOMELAB_RUNNER_READY == 'true' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: [self-hosted, homelab]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download scan artifacts from the triggering run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: findings
+      - name: Forward to n8n
+        env:
+          N8N_INGEST_URL: ${{ vars.N8N_INGEST_URL }}
+          N8N_INGEST_TOKEN: ${{ secrets.N8N_INGEST_TOKEN }}
+          N8N_CA_FILE: ${{ vars.N8N_CA_FILE }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: .github/scripts/forward-findings.sh findings
