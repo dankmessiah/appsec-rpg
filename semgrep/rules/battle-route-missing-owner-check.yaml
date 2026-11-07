@@ -1,0 +1,41 @@
+rules:
+  - id: battle-route-missing-owner-check
+    languages: [javascript]
+    severity: ERROR
+    message: >-
+      Battle route '$PATH' acts on a battle id from the URL but never compares the battle's
+      owner (user_id) to the session user. Any logged-in player could answer or forfeit another
+      player's battle (BOLA / IDOR). Load the battle with `WHERE id = $1 AND user_id = $2` or
+      check `battle.user_id === req.user.id` and return 404.
+    metadata:
+      category: security
+      cwe: "CWE-639: Authorization Bypass Through User-Controlled Key"
+      owasp: ["A01:2021 - Broken Access Control", "API1:2023 - Broken Object Level Authorization"]
+      confidence: MEDIUM
+      likelihood: HIGH
+      impact: HIGH
+      security-severity: "8.1"
+      references:
+        - docs/superpowers/specs/2026-11-07-appsec-rpg-design.md#api-apiv1-documented-in-openapiyaml
+    patterns:
+      - pattern: $ROUTER.$METHOD($PATH, ..., $HANDLER)
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(get|post|put|patch|delete|all)$
+      # '/battles/:id...' (mounted at the app) or '/:id/answer|forfeit' (inside the battles router)
+      - metavariable-regex:
+          metavariable: $PATH
+          regex: ^['"`](/api/v1)?(/battles/:id[^'"`]*|/:id/(answer|forfeit))['"`]$
+      - metavariable-pattern:
+          metavariable: $HANDLER
+          patterns:
+            - pattern-either:
+                - pattern: |
+                    ($REQ, $RES, ...) => { ... }
+                - pattern: |
+                    function ($REQ, $RES, ...) { ... }
+            # Any mention of the owner column/field in the handler (SQL `AND user_id = $2`,
+            # `battle.user_id !== req.user.id`, `userId`) counts as an ownership check.
+            - pattern-not-regex: \b(user_id|userId|ownerId|owner_id)\b
+      # A dedicated ownership middleware (requireOwner, loadOwnedBattle, assertBattleOwner...) also counts.
+      - pattern-not-regex: (?i)\b(require|assert|check|load|ensure)\w*Own\w*\b

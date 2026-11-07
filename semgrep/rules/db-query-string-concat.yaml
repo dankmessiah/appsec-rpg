@@ -1,0 +1,45 @@
+rules:
+  - id: db-query-string-concat
+    languages: [javascript]
+    severity: ERROR
+    message: >-
+      SQL passed to $DB.$QUERY is built with string concatenation or a template literal. If any
+      part comes from the request this is SQL injection. Use a parameterized query:
+      $DB.$QUERY('... WHERE id = $1', [value]). The design spec requires all queries to go
+      through parameterized statements in db.js.
+    metadata:
+      category: security
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+      owasp: ["A03:2021 - Injection"]
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+      security-severity: "8.8"
+    patterns:
+      - pattern-either:
+          - pattern: $DB.$QUERY($A + $B, ...)
+          - pattern: $DB.$QUERY(`...${$X}...`, ...)
+          # SQL built in a variable first, then passed to the query call.
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      $SQL = $A + $B;
+                      ...
+                  - pattern-inside: |
+                      $SQL = `...${$X}...`;
+                      ...
+                  - pattern-inside: |
+                      $SQL += $A;
+                      ...
+              - pattern: $DB.$QUERY($SQL, ...)
+      - metavariable-regex:
+          metavariable: $DB
+          regex: ^(db|pool|client|pg|tx|conn|connection|this\.db|this\.pool)$
+      - metavariable-regex:
+          metavariable: $QUERY
+          regex: ^(query|one|many|any|none|oneOrNone|manyOrNone|result)$
+      # Concatenating two literals (line-wrapping a long query) is fine.
+      - pattern-not: $DB.$QUERY("..." + "...", ...)
+      - pattern-not-inside: |
+          $SQL = "..." + "...";
+          ...
