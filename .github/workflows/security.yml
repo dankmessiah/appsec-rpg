@@ -68,7 +68,7 @@ jobs:
         continue-on-error: true
         run: |
           local_rules=()
-          [ -d .semgrep ] && local_rules=(--config /src/.semgrep/)
+          [ -d semgrep/rules ] && local_rules=(--config /src/semgrep/rules/)
           docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE" \
             semgrep scan --metrics=off --disable-version-check \
               --config p/owasp-top-ten --config p/javascript --config p/nodejs --config p/docker \

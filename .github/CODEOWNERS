@@ -11,6 +11,6 @@
 
 # Pipeline and lab (AppSec program)
 /.github/            @dankmessiah
-/.semgrep/           @dankmessiah
+/semgrep/            @dankmessiah
 /.zap/               @dankmessiah
 /docs/lab/           @dankmessiah
