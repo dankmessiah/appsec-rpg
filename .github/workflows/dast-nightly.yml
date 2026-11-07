@@ -1,0 +1,89 @@
+# Nightly authenticated DAST against the LAN-only homelab staging instance.
+# Runs ONLY on the self-hosted runner labelled `homelab`; never on GitHub-hosted runners.
+#
+# Repo variables:  HOMELAB_RUNNER_READY=true (gate: without it, scheduled jobs would queue for 24 h)
+#                  STAGING_URL=http://<lan-ip>:3000
+# Repo secrets:    SEED_ALICE_PASSWORD, SEED_BOB_PASSWORD
+name: dast-nightly
+
+on:
+  schedule:
+    - cron: "17 7 * * *" # 07:17 UTC = 02:17 US Eastern
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-nightly
+  cancel-in-progress: false
+
+env:
+  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+
+jobs:
+  zap:
+    if: vars.HOMELAB_RUNNER_READY == 'true'
+    runs-on: [self-hosted, homelab]
+    timeout-minutes: 120
+    strategy:
+      max-parallel: 1 # alice first, then bob; one active scan at a time on the homelab
+      fail-fast: false
+      matrix:
+        user: [alice, bob]
+    env:
+      TARGET: ${{ vars.STAGING_URL }}
+      SCAN_USER: ${{ matrix.user }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Health check
+        run: curl -fsS -A appsec-lab-scanner "$TARGET/api/v1/health"
+      - name: Log in as ${{ matrix.user }}
+        env:
+          PASSWORD: ${{ matrix.user == 'alice' && secrets.SEED_ALICE_PASSWORD || secrets.SEED_BOB_PASSWORD }}
+        run: |
+          eval "$(.github/scripts/zap-login.sh "$TARGET" "$SCAN_USER" "$PASSWORD")"
+          echo "::add-mask::$SID"; echo "::add-mask::$CSRF"
+          { echo "SID=$SID"; echo "CSRF=$CSRF"; } >> "$GITHUB_ENV"
+      - name: ZAP full + API scan (Automation Framework)
+        continue-on-error: true # warn-only until Week 3 gating
+        run: |
+          mkdir -p zapwrk/reports && cp .zap/nightly-plan.yaml openapi.yaml zapwrk/ && chmod -R a+rwX zapwrk
+          docker run --rm -v "$PWD/zapwrk:/zap/wrk:rw" \
+            -e TARGET -e SID -e CSRF -e SCAN_USER \
+            "$ZAP_IMAGE" zap.sh -cmd \
+              -config connection.defaultUserAgent=appsec-lab-scanner \
+              -autorun /zap/wrk/nightly-plan.yaml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: zap-nightly-${{ matrix.user }}
+          path: zapwrk/reports/
+          if-no-files-found: warn
+
+  bola:
+    needs: zap
+    if: always() && vars.HOMELAB_RUNNER_READY == 'true'
+    runs-on: [self-hosted, homelab]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Replay alice's battle as bob
+        env:
+          SEED_ALICE_PASSWORD: ${{ secrets.SEED_ALICE_PASSWORD }}
+          SEED_BOB_PASSWORD: ${{ secrets.SEED_BOB_PASSWORD }}
+          TARGET: ${{ vars.STAGING_URL }}
+        run: |
+          .github/scripts/bola-check.sh "$TARGET"
+          n=$(jq length bola-findings.json)
+          echo "### BOLA check: $n finding(s)" >> "$GITHUB_STEP_SUMMARY"
+          [ "$n" = 0 ] || echo "::warning::BOLA: bob could act on alice's battle ($n probe(s)). See bola-findings.json."
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: bola-findings
+          path: bola-findings.json

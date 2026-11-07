@@ -1,0 +1,26 @@
+# Dependencies and build output
+node_modules/
+coverage/
+dist/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Scanner output (CI uploads these as artifacts)
+*.sarif
+sbom*.json
+zap-*/
+report_*.html
+report_*.json
+report_*.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
