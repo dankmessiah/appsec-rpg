@@ -161,7 +161,7 @@ Weak-term weighting: selection weight = 1 + 2 × max(0, wrong − correct) for b
 | Leaderboard | Top 20 endless scores, each username linking to the public stats page |
 | Endless | Battle screen with kill counter and tier; run summary on death |
 
-Mobile-first: 44 px minimum tap targets, single column. Desktop: keys 1–4 and Enter. CSS-only feedback: screen shake on enemy hit, red flash on player hit, green flash on correct. Retro terminal/RPG styling, no image assets. All scripts external (CSP forbids inline).
+Mobile-first: 44 px minimum tap targets, single column. Desktop: keys 1–4 and Enter. CSS-only feedback: screen shake on enemy hit, red flash on player hit, green flash on correct. Styling: clean modern terminal, cyan (#38E4FF) on deep navy (#070B16), magenta (#FF3FA4) for enemies and damage, amber (#FFC14D) for XP, no CRT effects. Sprites are PNG assets (cel-shaded vector style, see `docs/art/PROMPTS.md`): player idle/attack/hurt/victory and one grunt, elite and boss per section, served from `public/assets/`. All scripts external (CSP forbids inline).
 
 ## Deployment
 
