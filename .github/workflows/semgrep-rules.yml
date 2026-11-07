@@ -1,0 +1,26 @@
+# Unit tests for the custom Semgrep rules in semgrep/rules/.
+name: semgrep-rules
+
+on:
+  pull_request:
+    paths: ["semgrep/**", ".github/workflows/semgrep-rules.yml"]
+  push:
+    branches: [main]
+    paths: ["semgrep/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: semgrep --test
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src \
+            semgrep/semgrep:1.184.0@sha256:cc1b68266f267878b39739373ea9985b9a78e5d64497dd875c8de100b22695ed \
+            semgrep --test --metrics=off --disable-version-check semgrep/rules/
