@@ -5,13 +5,13 @@ Build the interview-prep lab described below against this repo (`dankmessiah/app
 ## Context
 
 - **Why this exists.** Nunzio is interviewing for an Application Security role whose first job is to select and stand up a SAST/DAST program, onboard dev teams, and hand operational alerts to Security Operations. He is a SecOps analyst (SOC, IR, CrowdStrike NG-SIEM, Splunk, Entra/Okta) and a top-1% Tines builder; he has not run an AppSec program before. This lab is his hands-on evidence for the interview. Every artifact should be something he can screenshot and walk an interviewer through in five minutes.
-- **The interview story.** "I run AppSec like a detection pipeline: high-signal findings, automated routing to owners, a runbook-backed SOC handoff." The handoff (Week 2) is the differentiator; don't shortchange it.
+- **The interview story.** "I run AppSec like a detection pipeline: high-signal findings, automated routing to owners, a runbook-backed SOC handoff." The handoff (Week 2) is the differentiator; don't shortchange it. Build the n8n workflows so each stage (ingest, enrich, dedupe, route) is its own clearly named node group, because he will screenshot them.
 - **The game is being built in a separate Claude session at the same time.** Its code lands in `server/`, `shared/`, `public/`, `db/`, `tests/`, plus `Dockerfile`, `docker-compose.yml` and `openapi.yaml`. Until it exists, build what you can (see Starting order) and design the rest against the spec.
 
 ## Environment facts
 
 - **Homelab:** Proxmox host (reachable via the Proxmox MCP tools in Claude). Wazuh is the SIEM. Firewalla fronts the LAN. 1Password holds secrets; use it for anything local, GitHub Actions secrets for anything in CI.
-- **Automation platform:** Tines (community edition) for the SOC-handoff flows, because Tines is the interview story. Nunzio also runs a self-hosted n8n instance (connected as the `n8n-mcp` MCP server); use it for any internal glue (e.g. runner health, nightly scan kick-off) where it's faster, but the finding → enrich → route → Jira/SIEM flow lives in Tines.
+- **Automation platform:** Nunzio's self-hosted n8n instance, connected as the `n8n-mcp` MCP server. All automation lives there: the finding → enrich → route → Jira/SIEM flow and any internal glue (runner health, nightly scan kick-off). Do not use Tines (its free tier is too limited). Build workflows through the n8n-mcp tools and follow the repo's `n8n-automation` skill if listed. In the interview Nunzio presents the n8n flows as the SOAR layer and explains how the same design maps to Tines, which he already knows well.
 - **Ticketing:** Jira free tier. Create a project key `APPSEC`.
 - **Chat alerts:** Slack (a personal workspace is fine).
 - **Staging target:** the game's Docker Compose stack on a Proxmox LXC or VM, LAN-only, `http://<lan-ip>:3000`. Postgres is not published. Seeded users `alice`, `bob`, `admin` with passwords from `.env`.
@@ -23,7 +23,7 @@ Do these first; none depend on application code:
 1. Repo hygiene: `.gitignore`, `CODEOWNERS` (map `server/` and `shared/` to `@dankmessiah`, `docs/lab/` to the lab), branch protection on `main` requiring the security workflow and `npm test`.
 2. Fork Juice Shop and get its full pipeline (SAST, secrets, SCA, ZAP baseline) green. This is where you learn the tooling and collect real findings.
 3. Set up the self-hosted runner on Proxmox and verify a trivial workflow runs on it.
-4. Stand up Tines, Jira and Slack. Build the Week 2 flows against Juice Shop output.
+4. Confirm n8n is reachable through `n8n-mcp`; set up Jira and Slack. Build the Week 2 workflows in n8n against Juice Shop output.
 5. Write the runbook and RACI.
 6. Scaffold `security.yml` for `appsec-rpg` with every job present but path filters so jobs no-op cleanly until the directories exist.
 
@@ -66,10 +66,10 @@ Juice Shop is the calibration target; `appsec-rpg` is the production-like one.
 4. Enable GitHub push protection and Dependabot on both repos.
 
 ### Week 2: SOC handoff
-1. Send scanner output (SARIF or JSON) via webhook into Tines (community edition).
+1. Send scanner output (SARIF or JSON) via webhook into an n8n workflow (`appsec-ingest`).
 2. Enrich each finding: mock owner (from a CODEOWNERS file), app tier, exposure.
 3. Dedupe on rule + file + line (SAST) or rule + URL + param (DAST).
-4. Route: every finding to a Jira ticket (free tier) with an SLA date by severity; critical findings also to a SIEM event (Wazuh on the homelab, or a Splunk dev license) and a Slack message.
+4. Route: every finding to a Jira ticket (free tier) with an SLA date by severity; critical findings also to a Wazuh event (homelab SIEM) and a Slack message. Export the finished n8n workflows as JSON into `docs/lab/n8n/`.
 5. Write `docs/lab/runbook-exposed-secret.md` and `docs/lab/raci.md`.
 6. Capture screenshots of each stage into `docs/lab/screenshots/`.
 
@@ -81,13 +81,13 @@ Juice Shop is the calibration target; `appsec-rpg` is the production-like one.
 5. Draft the 30/60/90 plan and tool evaluation matrix in `docs/lab/`.
 
 ## Constraints
-- Never commit real credentials. Use GitHub Actions secrets, Tines credentials and 1Password.
+- Never commit real credentials. Use GitHub Actions secrets, n8n credentials and 1Password. Scrub credentials from exported n8n workflow JSON before committing.
 - Pipeline on `appsec-rpg` must finish in under 5 minutes on PR.
 - The homelab staging instance is LAN-only. Scheduled scans against it must run from the `homelab` self-hosted runner, never from GitHub-hosted runners.
 - Scanner traffic must be identifiable: dedicated User-Agent `appsec-lab-scanner` so the SIEM can suppress or tag it.
 
 ## Done when
 - A PR to `appsec-rpg` shows Semgrep, Gitleaks and CodeQL results in the Security tab within 5 minutes.
-- A seeded secret on a branch is blocked by push protection and, if forced through a PR, lands as a Jira ticket plus a SIEM event via Tines.
+- A seeded secret on a branch is blocked by push protection and, if forced through a PR, lands as a Jira ticket plus a Wazuh event via n8n.
 - A Juice Shop ZAP scan produces findings that reach Jira with owner and SLA.
 - The runbook, RACI, triage log, gating policy and 30/60/90 plan exist and are committed.
