@@ -32,7 +32,7 @@ Tested in n8n with pinned data (execution 12787): 1 Gitleaks SARIF secret + 1 BO
    - *AppSec ingest token*: Header Auth, name `X-AppSec-Token`, value = a random 32-byte hex (`openssl rand -hex 32`). Put the same value in GitHub secret `N8N_INGEST_TOKEN`. **Then open the webhook node and select it.** On creation, n8n auto-assigned your existing *ff-api service token* credential to this node. Replace it; don't share tokens between services.
    - *Jira APPSEC*: Jira SW Cloud API (email + API token).
    - *Discord AppSec bot*: Discord Bot API. Create the bot at discord.com/developers → New Application → Bot → Reset Token, then invite it to your server with *Send Messages* on `#appsec-alerts`.
-   - *Wazuh API user*: Basic Auth, a Wazuh API user with `events:ingest`. If Wazuh's API uses a self-signed cert, add its CA to n8n (`NODE_EXTRA_CA_CERTS`) rather than disabling TLS checks.
+   - *Wazuh API user*: Basic Auth, a Wazuh API user with the `event:ingest` permission. If Wazuh's API uses a self-signed cert, add its CA to n8n (`NODE_EXTRA_CA_CERTS`) rather than disabling TLS checks.
 2. In the workflow: pick **project APPSEC** and **issue type** in *Create APPSEC Jira Ticket*, and the **server** and **#appsec-alerts** in both Discord nodes. Check the Wazuh URL (`https://wazuh.home.arpa:55000`).
 3. Test: *Execute workflow* (test URL), then
    ```bash
