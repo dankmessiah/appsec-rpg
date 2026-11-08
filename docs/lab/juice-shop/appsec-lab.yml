@@ -221,7 +221,7 @@ jobs:
         with:
           target: http://localhost:3000
           docker_name: ${{ env.ZAP_IMAGE }}
-          cmd_options: -a -m 3 -J zap-baseline.json -z "-config connection.defaultUserAgent=appsec-lab-scanner"
+          cmd_options: -a -m 3 -z "-config connection.defaultUserAgent=appsec-lab-scanner"
           allow_issue_writing: false
           fail_action: false
           artifact_name: zap-baseline
