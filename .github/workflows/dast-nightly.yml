@@ -4,6 +4,8 @@
 # Repo variables:  HOMELAB_RUNNER_READY=true (gate: without it, scheduled jobs would queue for 24 h)
 #                  STAGING_URL=http://<lan-ip>:3000
 # Repo secrets:    SEED_ALICE_PASSWORD, SEED_BOB_PASSWORD
+# Scheduled runs skip until STAGING_URL is set, so the nightly is not red before staging exists.
+# Manual runs (workflow_dispatch) always go, to test the runner.
 name: dast-nightly
 
 on:
@@ -23,7 +25,7 @@ env:
 
 jobs:
   zap:
-    if: vars.HOMELAB_RUNNER_READY == 'true'
+    if: vars.HOMELAB_RUNNER_READY == 'true' && (vars.STAGING_URL != '' || github.event_name == 'workflow_dispatch')
     runs-on: [self-hosted, homelab]
     timeout-minutes: 120
     strategy:
@@ -65,7 +67,7 @@ jobs:
 
   bola:
     needs: zap
-    if: always() && vars.HOMELAB_RUNNER_READY == 'true'
+    if: always() && vars.HOMELAB_RUNNER_READY == 'true' && (vars.STAGING_URL != '' || github.event_name == 'workflow_dispatch')
     runs-on: [self-hosted, homelab]
     timeout-minutes: 5
     steps:
