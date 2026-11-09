@@ -1,9 +1,14 @@
-FROM node:22-alpine AS dependencies
+FROM node:22-alpine3.24 AS node-base
+RUN apk upgrade --no-cache \
+    && npm install --global --ignore-scripts --cache /tmp/npm-cache npm@11.21.2 \
+    && rm -rf /tmp/npm-cache
+
+FROM node-base AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
-FROM node:22-alpine AS runtime
+FROM node-base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
