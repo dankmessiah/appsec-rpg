@@ -107,7 +107,7 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
   /battles:
     post:
-      summary: Start a battle and forfeit any existing active battle
+      summary: Start a battle, optionally preserving an existing active battle
       operationId: startBattle
       security:
         - session: []
@@ -122,6 +122,10 @@ paths:
               required: [mode]
               properties:
                 mode: { type: string, enum: [campaign, endless] }
+                replaceActive:
+                  type: boolean
+                  default: true
+                  description: Forfeit an existing active battle before starting the new one. Set false to reject the request if a battle is already active.
       responses:
         '201':
           description: New battle and first public question
@@ -131,7 +135,11 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
-        '409': { $ref: '#/components/responses/Error' }
+        '409':
+          description: An active battle already exists and replacement is disabled, Endless is locked, or the campaign is complete
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
   /battles/{id}/answer:
     parameters:
       - $ref: '#/components/parameters/BattleId'
