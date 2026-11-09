@@ -160,6 +160,34 @@ test('concurrent starts leave only one active battle and reset forfeited progres
   await mutate(alice, 'post', '/battles/' + rows[0].id + '/forfeit').send({}).expect(409);
 });
 
+test('safe starts serialize and preserve an existing battle and progress', async () => {
+  const start = () => mutate(alice, 'post', '/battles').send({ mode: 'campaign', replaceActive: false });
+  const replies = await Promise.all([start(), start()]);
+  expect(replies.map((reply) => reply.status).sort()).toEqual([201, 409]);
+  const battle = replies.find((reply) => reply.status === 201).body;
+  const battles = () => pool.query('SELECT * FROM battles WHERE user_id = $1 ORDER BY id', [alice.user.id]);
+  const progress = () => pool.query('SELECT * FROM progress WHERE user_id = $1', [alice.user.id]);
+  const terms = () => pool.query('SELECT * FROM term_stats WHERE user_id = $1 ORDER BY term_id', [alice.user.id]);
+  const before = [(await battles()).rows, (await progress()).rows, (await terms()).rows];
+  expect(before[0].filter((row) => row.status === 'active').map((row) => row.id)).toEqual([battle.id]);
+
+  const rejected = await start().expect(409);
+  expect(rejected.body.error).toBe('A battle is already active');
+  expect([(await battles()).rows, (await progress()).rows, (await terms()).rows]).toEqual(before);
+
+  const replacement = await mutate(alice, 'post', '/battles').send({ mode: 'campaign' }).expect(201);
+  expect(replacement.body.id).not.toBe(battle.id);
+  const { rows } = await pool.query('SELECT status FROM battles WHERE id = $1', [battle.id]);
+  expect(rows).toEqual([{ status: 'forfeit' }]);
+  await mutate(alice, 'post', '/battles/' + replacement.body.id + '/forfeit').send({}).expect(200);
+});
+
+test('rejects nonboolean replacement values', async () => {
+  for (const replaceActive of ['false', 0, null]) {
+    await mutate(alice, 'post', '/battles').send({ mode: 'campaign', replaceActive }).expect(400);
+  }
+});
+
 test('validates malformed, oversized, and incorrectly typed JSON payloads', async () => {
   await mutate(alice, 'post', '/battles').type('json').send('{').expect(400);
   await mutate(alice, 'post', '/battles').type('text').send('campaign').expect(415);

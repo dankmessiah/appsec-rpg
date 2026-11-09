@@ -8,7 +8,10 @@ const { createEnemy, forfeitProgress, resolveTurn } = require('./engine');
 const { HttpError, validate } = require('./http');
 const { toProgress } = require('./progress');
 
-const startSchema = z.strictObject({ mode: z.enum(['campaign', 'endless']) });
+const startSchema = z.strictObject({
+  mode: z.enum(['campaign', 'endless']),
+  replaceActive: z.boolean().default(true),
+});
 const uuidSchema = z.uuid().transform((value) => value.toLowerCase());
 const answerSchema = z.union([
   z.strictObject({ questionId: uuidSchema, choice: z.int().min(0).max(3) }),
@@ -86,7 +89,7 @@ function battleRoutes({ pool, now }) {
   router.use('/battles', requireSession, requireCsrf);
 
   router.post('/battles', async (req, res) => {
-    const { mode } = validate(startSchema, req.body);
+    const { mode, replaceActive } = validate(startSchema, req.body);
     const userId = req.session.id;
     const response = await transaction(pool, async (client) => {
       const row = await lockProgress(client, userId);
@@ -99,6 +102,7 @@ function battleRoutes({ pool, now }) {
         "SELECT id, mode FROM battles WHERE user_id = $1 AND status = 'active' FOR UPDATE", [userId],
       );
       if (active) {
+        if (!replaceActive) throw new HttpError(409, 'A battle is already active');
         const abandoned = await abandon(client, active, userId, progress, bestStreak);
         progress = abandoned.progress;
         if (abandoned.runSummary) bestStreak = 0;
