@@ -209,6 +209,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "options": {
+          "allowUnauthorizedCerts": false,
           "response": {
             "response": {
               "responseFormat": "text",
@@ -248,6 +249,9 @@
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
+        "options": {
+          "allowUnauthorizedCerts": false
+        },
         "jsonBody": "={{ JSON.stringify({ events: [ JSON.stringify({ appsec_lab: true, source: \"n8n-appsec-ingest\", severity: $(\"Enrich Owner Tier Exposure\").item.json.severity, kind: $(\"Enrich Owner Tier Exposure\").item.json.kind, tool: $(\"Enrich Owner Tier Exposure\").item.json.tool, rule: $(\"Enrich Owner Tier Exposure\").item.json.rule, repo: $(\"Enrich Owner Tier Exposure\").item.json.repo, owner: $(\"Enrich Owner Tier Exposure\").item.json.owner, location: $(\"Enrich Owner Tier Exposure\").item.json.file || $(\"Enrich Owner Tier Exposure\").item.json.url, jira: $(\"Create APPSEC Jira Ticket\").item.json.key, runbook: $(\"Enrich Owner Tier Exposure\").item.json.runbook }) ] }) }}"
       }
     },

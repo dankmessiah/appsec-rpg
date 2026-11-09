@@ -34,7 +34,9 @@ Webhook ─▶ 1 Ingest ─▶ 2 Enrich ─▶ 3 Dedupe ─▶ 4 Route
 
 The earlier pinned execution 12787 simulated external calls and is not live-delivery evidence. The ingest token was rotated across the vault, GitHub secret, and n8n credential. Payload redaction requires a paid feature on this instance, so saved execution payloads and progress are disabled for manual, successful, and failed runs. Older executions are not removed by this setting. Use downstream records as delivery evidence; do not restore payload saving merely to capture webhook headers.
 
-Remaining hardening: the live Wazuh connection still bypasses certificate validation. The public template does not carry that bypass; install the Wazuh CA in n8n before considering TLS hardening complete.
+TLS hardening verified on 2026-11-08 (local date): the Wazuh API now presents a certificate with a matching endpoint identity, signed by a dedicated local CA. n8n mounts the public CA read-only and loads it through `NODE_EXTRA_CA_CERTS`. A request from inside the running n8n container returned HTTP 401 with `tlsAuthorized: true`, proving certificate and hostname validation without sending credentials or creating events. Both published Wazuh nodes explicitly set `allowUnauthorizedCerts: false`. Certificate and Compose backups were retained; all Wazuh services were active after the authorized restart. This is transport verification, not a second alert-delivery test.
+
+The old webhook execution 13252 was deleted with owner approval after token rotation. The earlier pinned simulation 12787 remains. The stale duplicate vault item ID from the handoff was no longer present when cleanup was attempted; the active ingest-token item was not changed.
 
 ## Setup (Nunzio)
 
