@@ -4,11 +4,13 @@ Week 3, deliverable 1. A hand-triage of 30 Semgrep findings on the calibration t
 
 | | |
 |---|---|
-| Target | `juice-shop/juice-shop` @ `717f5ef` (v20.3.0), upstream clone (the fork's own run will replace this) |
+| Target | `dankmessiah/juice-shop`, PR #1 merge commit `e6b40869320e7bdb17b732a8fd2a8999e5196342` (v20.3.0) |
 | Scanner | Semgrep 1.184.0, `--metrics=off` |
 | Rulesets | `p/owasp-top-ten`, `p/javascript`, `p/nodejs` (same packs as `appsec-rpg`, minus `p/docker`) |
 | Raw output | 43 unique findings (rule + file + line); 30 triaged below |
-| Date | 2026-11-07 |
+| Date | Triaged 2026-11-07; fork artifact verified 2026-11-08 |
+
+Fork evidence: [run 42450911928](https://github.com/dankmessiah/juice-shop/actions/runs/42450911928), artifact `sarif-semgrep`, file `semgrep.sarif`. It contains 43 results, and all 30 rule/file/line locations below match. Comparing the scanned merge commit with upstream `717f5ef` changes only the lab workflow and summary script; the triaged source files are unchanged.
 
 **Verdicts.** **TP** means the issue is real and exploitable or a real weakness in this context. **FP** means the code doesn't have the weakness the rule describes, or it never runs. Severity is my call after triage, not the rule's.
 
@@ -90,4 +92,4 @@ Precision isn't the whole story. Known Juice Shop vulns these packs did **not** 
 1. `semgrep scan --metrics=off --config p/owasp-top-ten --config p/javascript --config p/nodejs --json .` on a clean clone.
 2. Deduplicated on rule + file + line, the same key the n8n dedupe stage uses.
 3. For each finding, read the code and traced whether the input is attacker-controlled and whether the code runs in the deployed app. Verdict and severity are recorded above.
-4. Re-run in the fork's pipeline when it exists, and update this log if the counts differ.
+4. Verified the fork's existing pipeline artifact on 2026-11-08: 43 results, all 30 selected locations matched, and no changes to the triaged source files. The existing verdicts and precision calculation therefore remain applicable. The 68 % figure is the calculated result of the two exclusions on this sample, not evidence of a newly tuned pipeline run.

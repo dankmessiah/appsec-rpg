@@ -77,3 +77,9 @@ Do these in order. Rotation comes before any git cleanup.
 2. `git push`. Push protection should block it. Screenshot `2-5-push-protection-block.png`.
 3. Bypass with reason *"used in tests"* and open a PR. Gitleaks flags it, n8n creates the Jira ticket, the Wazuh event and the Discord message. Screenshots `2-5-jira-ticket.png`, `2-5-wazuh-event.png`, `2-5-discord.png`.
 4. Walk this runbook end to end and time it. Close the PR and delete the branch.
+
+### Drill evidence, 2026-11-08 (local date)
+
+[PR #9](https://github.com/dankmessiah/appsec-rpg/pull/9) was closed unmerged after the exercise. Its fixture was generated locally, never issued by GitHub, and returned HTTP 401 from GitHub's authenticated-user endpoint before commit. Push protection rejected commit `16c8f283e49614a08c8548357632ec96fda35431` at `docs/lab/fixtures/seeded-secret.env:4`; one owner-authorized bypass used reason `used_in_tests`. Secret-scanning alert 1 records the bypass and is resolved as `used_in_tests`, not revoked, because no real credential existed.
+
+The security run produced one Gitleaks result. The forwarder created APPSEC-7 with Highest priority, a seven-day SLA due 2026-11-16, and the runbook link. Wazuh recorded the corresponding Critical event 83 seconds after the security run started. The native Jira fields were verified directly. Discord delivery was inferred from reaching the downstream Wazuh node, not independently viewed. The remote demo branch was deleted after closing the PR. Before cleanup, full-history Gitleaks also found the fixture on an unrelated documentation PR because checkout fetched every remote branch. This proves detection and routing; it does not simulate provider revocation or complete incident-response timing.

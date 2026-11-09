@@ -5,7 +5,7 @@ The SOAR layer for Week 2. Scanner output goes in; owner-routed Jira tickets com
 | | |
 |---|---|
 | Workflow | **AppSec RPG - appsec-ingest** (n8n id `DzZy8fLAZaSiPs0N`, folder *AppSec RPG*, tags `appsec-rpg`, `appsec-lab`) |
-| State | **Draft, unpublished.** Needs credentials (below) before it can go live |
+| State | **Published and live-tested on 2026-11-08.** The sanitized export still requires instance-specific setup after import |
 | Trigger | `POST https://n8n.home.arpa/webhook/appsec-ingest`, Header Auth `X-AppSec-Token` |
 | Export | [`appsec-ingest.json`](appsec-ingest.json), credentials scrubbed (each node names the credential *type* it needs) |
 | Fed by | `.github/workflows/findings-forward.yml` on the homelab runner, after `security` and `dast-nightly` complete |
@@ -24,16 +24,26 @@ Webhook ─▶ 1 Ingest ─▶ 2 Enrich ─▶ 3 Dedupe ─▶ 4 Route
 3. **Dedupe**: key = `repo|rule|file|line` (SAST) or `repo|rule|url-without-query|param` (DAST); remembered across executions (10 000 keys), so a re-run of the same PR doesn't re-ticket.
 4. **Route**: every finding becomes a Jira ticket. If Jira fails, Discord gets a warning, so failures aren't silent. Critical findings also get a Discord alert and a Wazuh event (JSON with `appsec_lab: true`, tool, rule, owner, Jira key, runbook link).
 
-Tested in n8n with pinned data (execution 12787): 1 Gitleaks SARIF secret + 1 BOLA finding + 1 medium Semgrep finding → 3 tickets, 2 routed as Critical. External calls (Jira, Discord, Wazuh) were simulated by the pin data, not proven live.
+## Verified evidence (2026-11-08)
+
+- A production webhook submission with two synthetic Critical findings created APPSEC-4 (fake secret) and APPSEC-5 (BOLA routing fixture). The user confirmed both Discord alerts; Wazuh rule 100901 recorded two corresponding events. Their event payloads retain the original KAN-4 and KAN-5 keys from before the Jira project-key rename.
+- One real ZAP finding from [Juice Shop calibration run 42450911928](https://github.com/dankmessiah/juice-shop/actions/runs/42450911928), plugin 10038 and its first instance only, created APPSEC-6. Verified: Medium priority, native due date 2027-02-06, descriptive owner `@juice-maintainers`, Tier 3, and 90-day SLA. This was a one-time submission, not permanent forwarding of the fork's output.
+- The published workflow maps native Jira Priority and Due date in addition to its description. The two earlier Critical tickets were corrected to Highest and 2026-11-15. Mock owners remain descriptive; Jira assignees remain unassigned.
+- The [seeded-secret drill PR #9](https://github.com/dankmessiah/appsec-rpg/pull/9) proved the full scanner-to-routing path. Push protection blocked the locally generated, nonfunctional PAT-shaped fixture; the owner authorized one `used_in_tests` bypass. [Security run 42538751150](https://github.com/dankmessiah/appsec-rpg/actions/runs/42538751150) produced exactly one Gitleaks finding and [forwarder run 42538856021](https://github.com/dankmessiah/appsec-rpg/actions/runs/42538856021) succeeded. APPSEC-7 was created with native Highest priority and due date 2026-11-16; Wazuh rule 100901 recorded it at 2026-11-09T00:11:59Z, 83 seconds after the security run started. The workflow reached Wazuh after its Discord step, but the drill message was not independently inspected in Discord. PR #9 was closed unmerged. The due date uses the UTC processing date plus seven days.
+- [Forwarder run 42452125521, attempt 2](https://github.com/dankmessiah/appsec-rpg/actions/runs/42452125521/attempts/2) succeeded after token rotation. Its five source SARIF files contained zero results, so this verifies the forwarder job, not additional ticket delivery.
+
+The earlier pinned execution 12787 simulated external calls and is not live-delivery evidence. The ingest token was rotated across the vault, GitHub secret, and n8n credential. Payload redaction requires a paid feature on this instance, so saved execution payloads and progress are disabled for manual, successful, and failed runs. Older executions are not removed by this setting. Use downstream records as delivery evidence; do not restore payload saving merely to capture webhook headers.
+
+Remaining hardening: the live Wazuh connection still bypasses certificate validation. The public template does not carry that bypass; install the Wazuh CA in n8n before considering TLS hardening complete.
 
 ## Setup (Nunzio)
 
 1. **Credentials** in n8n (Credentials → Add):
-   - *AppSec ingest token*: Header Auth, name `X-AppSec-Token`, value = a random 32-byte hex (`openssl rand -hex 32`). Put the same value in GitHub secret `N8N_INGEST_TOKEN`. **Then open the webhook node and select it.** On creation, n8n auto-assigned your existing *ff-api service token* credential to this node. Replace it; don't share tokens between services.
+   - *AppSec ingest token*: Header Auth, name `X-AppSec-Token`, value = a random 32-byte hex (`openssl rand -hex 32`). Put the same value in GitHub secret `N8N_INGEST_TOKEN`. **Then open the webhook node and select the dedicated ingest credential.** Do not reuse another service's token.
    - *Jira APPSEC*: Jira SW Cloud API (email + API token).
    - *Discord AppSec bot*: Discord Bot API. Create the bot at discord.com/developers → New Application → Bot → Reset Token, then invite it to your server with *Send Messages* on `#appsec-alerts`.
    - *Wazuh API user*: Basic Auth, a Wazuh API user with the `event:ingest` permission. If Wazuh's API uses a self-signed cert, add its CA to n8n (`NODE_EXTRA_CA_CERTS`) rather than disabling TLS checks.
-2. In the workflow: pick **project APPSEC** and **issue type** in *Create APPSEC Jira Ticket*, and the **server** and **#appsec-alerts** in both Discord nodes. Check the Wazuh URL (`https://wazuh.home.arpa:55000`).
+2. In the workflow: pick **project APPSEC** and **issue type Task** in *Create APPSEC Jira Ticket*, and the **server** and **#appsec-alerts** in both Discord nodes. Replace the four priority-ID placeholders with your Jira instance's IDs for Highest, High, Medium, and Low. The system field `duedate` uses `YYYY-MM-DD`. Check the Wazuh URL (`https://wazuh.home.arpa:55000`).
 3. Test: *Execute workflow* (test URL), then
    ```bash
    curl -sS -X POST https://n8n.home.arpa/webhook-test/appsec-ingest \
@@ -41,7 +51,7 @@ Tested in n8n with pinned data (execution 12787): 1 Gitleaks SARIF secret + 1 BO
      --data @docs/lab/n8n/samples/sample-payload.json
    ```
    Expect 2 Critical tickets, 2 Discord alerts and 2 Wazuh events. Screenshot each stage: `2-1-ingest.png` … `2-4-route.png`, `2-4-jira.png`, `2-4-discord.png`, `2-4-wazuh.png`.
-4. **Publish** the workflow (it stays a draft until you do).
+4. **Publish** an imported workflow after setup. The existing lab workflow is already published.
 5. GitHub: variable `N8N_INGEST_URL=https://n8n.home.arpa/webhook/appsec-ingest`, secret `N8N_INGEST_TOKEN`; and on the runner, either trust the Caddy root CA system-wide or set variable `N8N_CA_FILE` to its path.
 
 ## Wazuh side
