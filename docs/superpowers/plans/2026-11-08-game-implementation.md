@@ -98,4 +98,6 @@ Owner: frontend implementer. Exclusive files: `public/index.html`, `public/app.j
 
 ## Separate infrastructure workstream
 
+Implementation checkpoint: all three game tasks are integrated and reviewed inline under the user's model exception. All 25 sprites are saved, the glossary spec is aligned, five suites and 24 tests pass, and local Compose plus browser section/defeat/endless/mobile checks pass. See `docs/game/verification.md` for evidence and limits. Game PR checks and the subsequent LAN deployment/lab work remain pending.
+
 Ephemeral runner provisioning is user-requested but needs its own credential and lifecycle design. Do not put reusable GitHub administration credentials in disposable runners. Keep the existing runner available until a replacement can complete two consecutive jobs. GitHub App installation and restricted Proxmox API credentials require explicit setup authorization and credential handoff. The game implementation does not depend on changing the runner first.

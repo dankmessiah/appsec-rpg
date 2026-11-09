@@ -1,4 +1,4 @@
-# AppSec RPG — Art Prompt Set (ChatGPT image generation)
+# AppSec RPG: Art Prompt Set (ChatGPT image generation)
 
 Style locked on 2026-11-07: clean vector / cel-shaded, cyan-on-navy palette, creatures made of code. Reference image: the Deserialization Hydra (`docs/art/reference/hydra.png`).
 
@@ -104,13 +104,13 @@ Size guidance to include in each prompt: grunt fills ~60% of the canvas height, 
 
 ## Asset checklist
 
-- [ ] player_idle · player_attack · player_hurt · player_victory
-- [ ] s0_grunt · s0_elite · s0_boss
-- [ ] s1_grunt · s1_elite · s1_boss (done)
-- [ ] s2_grunt · s2_elite · s2_boss
-- [ ] s3_grunt · s3_elite · s3_boss
-- [ ] s4_grunt · s4_elite · s4_boss
-- [ ] s5_grunt · s5_elite · s5_boss
-- [ ] s6_grunt · s6_elite · s6_boss
+- [x] player_idle · player_attack · player_hurt · player_victory
+- [x] s0_grunt · s0_elite · s0_boss
+- [x] s1_grunt · s1_elite · s1_boss
+- [x] s2_grunt · s2_elite · s2_boss
+- [x] s3_grunt · s3_elite · s3_boss
+- [x] s4_grunt · s4_elite · s4_boss
+- [x] s5_grunt · s5_elite · s5_boss
+- [x] s6_grunt · s6_elite · s6_boss
 - [ ] icon_s0 … icon_s6 (optional)
 - [ ] title_mark (optional)
