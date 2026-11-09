@@ -14,7 +14,7 @@ test('both health URLs share the per-IP budget and rejected requests skip Postgr
     const api = request(createApp({ pool }));
     for (let i = 0; i < 60; i += 1) {
       const path = i % 2 === 0 ? '/health' : '/api/v1/health';
-      await api.get(path).expect(200, { status: 'ok', db: true });
+      await api.get(path).expect(200, { status: 'ok', db: true, buildRevision: 'unknown' });
     }
     expect(query).toHaveBeenCalledTimes(60);
 

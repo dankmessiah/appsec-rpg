@@ -104,11 +104,15 @@ test('one-hour configuration sets matching cookie and database session lifetimes
 
 test('health and generic errors have safe bodies and request IDs', async () => {
   for (const path of ['/health', '/api/v1/health']) {
-    const response = await api.get(path).expect(200, { status: 'ok', db: true });
+    const response = await api.get(path).expect(200, { status: 'ok', db: true, buildRevision: 'unknown' });
     expect(response.headers['x-request-id']).toBeDefined();
     expect(response.headers['content-security-policy']).toContain("default-src 'self'");
   }
   const failed = request(createApp({ pool: { query: async () => { throw new Error('private-db-info'); } } }));
+  for (const path of ['/health', '/api/v1/health']) {
+    const health = await failed.get(path).expect(503, { status: 'unavailable', db: false, buildRevision: 'unknown' });
+    expect(health.headers['x-request-id']).toBeDefined();
+  }
   const response = await failed.get('/api/v1/leaderboard').expect(500);
   expect(response.body).toEqual({ error: 'Internal server error', requestId: response.headers['x-request-id'] });
 });

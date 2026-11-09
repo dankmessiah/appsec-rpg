@@ -341,10 +341,15 @@ components:
         requestId: { type: string, format: uuid }
     Health:
       type: object
-      required: [status, db]
+      required: [status, db, buildRevision]
       properties:
         status: { type: string, enum: [ok, unavailable] }
         db: { type: boolean }
+        buildRevision:
+          description: Source revision embedded in the image, or unknown for an unversioned development build
+          oneOf:
+            - { type: string, pattern: '^[0-9a-f]{40}$', minLength: 40, maxLength: 40 }
+            - { type: string, enum: [unknown] }
     Username:
       type: string
       minLength: 3

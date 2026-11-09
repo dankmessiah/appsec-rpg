@@ -6,6 +6,7 @@ const { ipKeyGenerator, rateLimit } = require('express-rate-limit');
 const { adminRoutes } = require('./admin');
 const { auth } = require('./auth');
 const { battleRoutes } = require('./battles');
+const { buildRevision } = require('./build-info');
 const { HttpError } = require('./http');
 const { readRoutes } = require('./read-routes');
 
@@ -52,10 +53,10 @@ function createApp({ pool, now = Date.now, authRateLimit = 10 }) {
   const health = async (req, res) => {
     try {
       await pool.query('SELECT 1');
-      res.json({ status: 'ok', db: true });
+      res.json({ status: 'ok', db: true, buildRevision });
     } catch {
       console.error('Health database check failed', { requestId: req.id });
-      res.status(503).json({ status: 'unavailable', db: false });
+      res.status(503).json({ status: 'unavailable', db: false, buildRevision });
     }
   };
   const healthLimit = limiter({ windowMs: 60_000, limit: 60 });

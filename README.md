@@ -15,6 +15,14 @@ docker compose exec -T app npm run seed
 
 Open `http://localhost:3000`. Sign in using a seeded account (`alice`, `bob`, or `admin`) and its configured password, or register a player account. Seeding again preserves existing progress and passwords.
 
+For a deployment image, build from the reviewed source checkout with its full Git revision:
+
+```sh
+docker build --build-arg BUILD_REVISION="$(git rev-parse HEAD)" -t appsec-rpg .
+```
+
+Both health URLs report this revision as `buildRevision`. Local builds that omit the argument report `unknown`. Setting the argument name as a runtime environment variable does not change the reported revision.
+
 ## Verify
 
 Use Node 22 and a disposable PostgreSQL 16 database with a name ending in `_test`. Set `NODE_ENV=test` and `DATABASE_URL` before running:
