@@ -58,7 +58,8 @@ function createApp({ pool, now = Date.now, authRateLimit = 10 }) {
       res.status(503).json({ status: 'unavailable', db: false });
     }
   };
-  app.get(['/health', '/api/v1/health'], health);
+  const healthLimit = limiter({ windowMs: 60_000, limit: 60 });
+  app.get(['/health', '/api/v1/health'], healthLimit, health);
 
   const api = express.Router();
   const authHandlers = auth({ pool, now, secureCookies });
