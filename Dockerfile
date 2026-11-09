@@ -17,6 +17,8 @@ COPY --chown=node:node server ./server
 COPY --chown=node:node shared ./shared
 COPY --chown=node:node db ./db
 COPY --chown=node:node public ./public
+ARG BUILD_REVISION
+RUN node -e 'const revision = process.env.BUILD_REVISION; if (revision !== undefined) { if (revision.length !== 40 || /[^0-9a-f]/.test(revision)) throw new Error("Invalid BUILD_REVISION"); require("node:fs").writeFileSync("build-revision", revision, { flag: "wx", mode: 0o444 }); }'
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=10 \
