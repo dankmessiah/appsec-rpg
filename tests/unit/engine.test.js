@@ -93,3 +93,18 @@ test('death and forfeits restart the current run while retaining XP and unlocks'
   assert.deepEqual(restarted.campaign, progress.campaign);
   assert.equal(progress.endless.kills, 8);
 });
+
+test('campaign enemy names match all 21 approved art prompts', () => {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+  const { createEnemy } = engine();
+  const art = readFileSync(resolve(__dirname, '../../docs/art/PROMPTS.md'), 'utf8');
+  const prompts = [...art.matchAll(/^\| `s([0-6])_(grunt|elite|boss)` \| ([^|]+) \|/gm)];
+  assert.equal(prompts.length, 21);
+  assert.equal(new Set(prompts.map(([, section, type]) => section + type)).size, 21);
+  const fights = { grunt: 0, elite: 4, boss: 6 };
+  for (const [, section, type, name] of prompts) {
+    const enemy = createEnemy({ section: Number(section), fight: fights[type], mode: 'campaign' });
+    assert.equal(enemy.name, name.trim());
+  }
+});

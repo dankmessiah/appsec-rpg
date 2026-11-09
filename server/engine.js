@@ -15,13 +15,13 @@ const ENEMY_RULES = {
   boss: { hp: 80, attack: 20, xp: 60 },
 };
 const ENEMY_NAMES = [
-  ['Scanner Scout', 'Taint Stalker', 'Toolchain Hydra'],
-  ['Payload Imp', 'Exploit Wraith', 'Injection Hydra'],
-  ['Cookie Goblin', 'Token Mimic', 'Identity Hydra'],
-  ['Checklist Sprite', 'Framework Sentinel', 'Standards Hydra'],
-  ['Severity Shade', 'Exposure Hunter', 'Risk Hydra'],
-  ['Dependency Gremlin', 'Pipeline Phantom', 'Supply Chain Hydra'],
-  ['Backlog Ghoul', 'Triage Golem', 'Program Hydra'],
+  ['False Positive Swarm', 'Flaky Crawler', 'The Blind Scanner'],
+  ['Payload Wasp', 'Reflected Mimic', 'Deserialization Hydra'],
+  ['Session Leech', 'Token Forger', 'The Broken Gatekeeper'],
+  ['Checklist Imp', 'Compliance Mimic', 'The Paper Dragon'],
+  ['Severity Gnat', 'Probability Fox', 'KEV Reaper'],
+  ['Typosquat Rat', 'Dependency Spider', 'The Poisoned Pipeline'],
+  ['Backlog Blob', 'Scope Creep', 'The Legacy Monolith'],
 ];
 
 function createInitialProgress() {
