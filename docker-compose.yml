@@ -20,6 +20,7 @@ services:
     env_file: .env
     environment:
       PORT: ${PORT:-3000}
+      SESSION_TTL_SECONDS: "${SESSION_TTL_SECONDS-604800}"
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     networks:

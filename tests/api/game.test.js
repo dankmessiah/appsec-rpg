@@ -1,4 +1,4 @@
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { Pool } = require('pg');
@@ -60,6 +60,46 @@ afterAll(async () => {
       await control.end();
     }
   }
+});
+
+function appWithSessionTtl(value, options) {
+  const previous = process.env.SESSION_TTL_SECONDS;
+  process.env.SESSION_TTL_SECONDS = value;
+  try {
+    return createApp(options);
+  } finally {
+    if (previous === undefined) delete process.env.SESSION_TTL_SECONDS;
+    else process.env.SESSION_TTL_SECONDS = previous;
+  }
+}
+
+test.each(['', '0', '-1', '3600.0', '1e3', '03600', ' 3600', '3600\n', '604801', 'Infinity'])(
+  'rejects invalid session lifetime %j at startup',
+  (value) => {
+    expect(() => appWithSessionTtl(value, { pool })).toThrow('SESSION_TTL_SECONDS must be an integer from 1 to 604800');
+  },
+);
+
+test.each(['1', '604800'])('accepts session lifetime boundary %s', (value) => {
+  expect(() => appWithSessionTtl(value, { pool })).not.toThrow();
+});
+
+test('one-hour configuration sets matching cookie and database session lifetimes', async () => {
+  const issuedAt = Date.now();
+  let sessionNow = issuedAt;
+  const configured = request(appWithSessionTtl('3600', { pool, now: () => sessionNow }));
+  const response = await configured.post('/api/v1/auth/login')
+    .send({ username: 'alice', password: seedPasswords.alice }).expect(200);
+  const flags = response.headers['set-cookie'][0];
+  expect(flags.match(/(?:^|; )Max-Age=(\d+)(?:;|$)/)?.[1]).toBe('3600');
+  const cookie = flags.split(';')[0];
+  const tokenHash = createHash('sha256').update(cookie.slice('sid='.length)).digest('hex');
+  const { rows: [session] } = await pool.query('SELECT expires_at FROM sessions WHERE token_hash = $1', [tokenHash]);
+  expect(session.expires_at.getTime()).toBe(issuedAt + 3_600_000);
+  sessionNow = issuedAt + 3_599_999;
+  await configured.get('/api/v1/auth/me').set('Cookie', cookie).expect(200);
+  sessionNow += 1;
+  await configured.get('/api/v1/auth/me').set('Cookie', cookie).expect(401);
 });
 
 test('health and generic errors have safe bodies and request IDs', async () => {

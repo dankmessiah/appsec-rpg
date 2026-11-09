@@ -6,7 +6,7 @@ const { transaction } = require('./db');
 const { HttpError, validate } = require('./http');
 const { initializeProgress } = require('./progress');
 
-const sessionLength = 7 * 24 * 60 * 60 * 1000;
+const defaultSessionTtlSeconds = 7 * 24 * 60 * 60;
 const passwordSchema = z.string().max(72).refine((value) => Buffer.byteLength(value) <= 72);
 const usernameSchema = z.string().regex(/^[a-zA-Z0-9_-]{3,20}$/).transform((value) => value.toLowerCase());
 const emptyBody = z.strictObject({}).optional();
@@ -27,7 +27,17 @@ function cookieToken(req) {
   return /(?:^|;\s*)sid=([0-9a-f]{64})(?=;|$)/.exec(req.headers.cookie || '')?.[1];
 }
 
+function sessionTtlMillis(value) {
+  if (value === undefined) return defaultSessionTtlSeconds * 1000;
+  const seconds = Number(value);
+  if (!Number.isInteger(seconds) || String(seconds) !== value || seconds < 1 || seconds > defaultSessionTtlSeconds) {
+    throw new Error('SESSION_TTL_SECONDS must be an integer from 1 to 604800');
+  }
+  return seconds * 1000;
+}
+
 function auth({ pool, now, secureCookies }) {
+  const sessionLength = sessionTtlMillis(process.env.SESSION_TTL_SECONDS);
   const cookieOptions = { httpOnly: true, secure: secureCookies, sameSite: 'strict', path: '/' };
 
   async function loadSession(req, res, next) {
