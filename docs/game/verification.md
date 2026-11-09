@@ -1,14 +1,16 @@
 # Game verification
 
-Verified on 2026-11-08 in an isolated local checkout and Docker Compose project. The controller reviewed the implementation inline, as authorized, and returned two defects to the implementers: enemy names differed from the approved art table, and a victory without rank-up rendered the literal text `null`. Both were corrected and rechecked.
+Verified on 2026-11-08 in an isolated local checkout and Docker Compose project. The controller reviewed the implementation inline, as authorized, and returned two defects to the implementers: enemy names differed from the approved art table, and a victory without rank-up rendered the literal text `null`. Both were corrected and rechecked. Initial CI also identified an unthrottled database health endpoint and vulnerable packages bundled with the base image's npm installation; follow-up fixes add shared health throttling and update Alpine packages and npm.
 
 ## Automated checks
 
-- Five suites and 24 tests pass against PostgreSQL 16. Each API suite creates its own temporary schema.
+- Six suites and 25 tests pass against PostgreSQL 16. State-changing API suites create their own temporary schemas; the health-limit regression only performs database connectivity checks.
 - Full campaign regression wins all 49 fights, checks every section unlock, persists 1295 XP, and permits endless only after the final boss. Defeat regression preserves earned XP and restarts the current section with full HP.
 - Authentication, session rotation/expiry, secure cookie flags, CSRF, role checks, cross-user battle denial, stale questions, concurrent answers/starts, payload validation, and repeated seed behavior pass.
 - Production container builds with Node 22 Alpine, runs as UID 1000, and has zero npm production audit findings at verification time.
 - Five low-severity development-only audit findings remain through Jest's unpatched `deepmerge` dependency. They are not installed in the runtime image.
+- The updated container scan has zero high or critical findings. Two medium findings remain in npm's bundled `glob` and `minimatch`; these are separate from application dependency findings. No scanner suppressions were added.
+- Both database health URLs share a 60-request-per-minute IP budget. Rejected requests do not query PostgreSQL. The container health probe normally uses 12 requests per minute.
 - All 25 sprite PNGs have RGBA channels with transparent pixels. The set contains four player poses and three enemies for each section.
 
 ## Runtime and browser checks
