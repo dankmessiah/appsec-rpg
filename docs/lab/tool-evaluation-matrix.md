@@ -23,6 +23,10 @@ How the lab's tools were chosen, and how the same criteria would score commercia
 | Snyk Code *(desk)* | 4 | 5 | 4 | 4 | 4 | 3 | 4.10 | Strong IDE plugin; bundles with SCA. |
 | Checkmarx / Veracode *(desk)* | 3 | 2 | 2 | 5 | 4 | 2 | 3.00 | Broad language coverage and compliance reporting; heavier, slower scans. |
 
+### CodeQL calibration evidence
+
+[Juice Shop run 42450911928](https://github.com/dankmessiah/juice-shop/actions/runs/42450911928) archived 48 CodeQL results across seven rules in `sarif-codeql/javascript.sarif`. GitHub analysis `2120530808` reports zero results. These measure different stages: the run used diff-informed PR analysis, and none of the 48 results' primary or related locations touched either file changed by PR #1. GitHub filters results outside the PR diff before reporting alerts; see [SARIF filtering](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/scan-from-the-command-line/incremental-analysis#step-5-filter-the-sarif-output). Zero PR alerts does not mean that CodeQL found no weaknesses. This artifact is from a diff-informed run and is not a complete baseline scan or a precision measurement.
+
 ## SCA, containers and IaC
 
 | Tool | Signal | DevEx | Speed | Coverage | Integration | Cost/ops | Weighted | Notes |
@@ -30,6 +34,10 @@ How the lab's tools were chosen, and how the same criteria would score commercia
 | Trivy (lab) | 4 | 3 | 5 | 5 | 5 | 5 | **4.35** | One binary for npm CVEs, image, IaC, SBOM. Pin by SHA: trivy-action tags were hijacked in March 2026. |
 | Dependabot (lab) | 4 | 5 | 5 | 4 | 3 | 5 | **4.30** | Auto-fix PRs; alerts via API; no reachability analysis. |
 | Snyk Open Source / Endor Labs *(desk)* | 5 | 4 | 4 | 4 | 4 | 2 | 4.05 | Reachability analysis cuts noise sharply; priced per dev. |
+
+### Dependabot calibration failures
+
+The three failed security-update jobs on 2026-11-08 reported `dependency_file_not_supported`: [file-type](https://github.com/dankmessiah/juice-shop/actions/runs/42450682217), [glob](https://github.com/dankmessiah/juice-shop/actions/runs/42450681230), and [@cyclonedx/cyclonedx-npm](https://github.com/dankmessiah/juice-shop/actions/runs/42450681219). Each log says the installed version cannot be determined without a lockfile or pinned version requirement. This is an update-input limitation, not evidence that the dependency is safe. No dependencies were upgraded and the calibration fork's intentionally disabled security-update setting was left unchanged.
 
 ## Secrets
 

@@ -1,8 +1,12 @@
 {
   "name": "AppSec RPG - appsec-ingest",
-  "_exported": "2026-11-07 from n8n workflow DzZy8fLAZaSiPs0N. Credentials scrubbed: each node names the credential TYPE it needs; re-select your own after import.",
+  "_exported": "2026-11-08 reconciled with published workflow DzZy8fLAZaSiPs0N. Credentials and instance-specific resource IDs scrubbed; configure placeholders after import. See README for live-state deviations.",
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none"
   },
   "tags": [
     "appsec-rpg",
@@ -98,7 +102,7 @@
           "__rl": true,
           "mode": "list",
           "value": "",
-          "cachedResultName": "Bug"
+          "cachedResultName": "Task"
         },
         "summary": "=[{{ $json.severity.toUpperCase() }}] {{ $json.title }} ({{ $json.tool }}) in {{ $json.repo }}",
         "additionalFields": {
@@ -106,6 +110,19 @@
           "labels": [
             "appsec",
             "scanner-finding"
+          ],
+          "priority": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ ({ Highest: '<HIGHEST_PRIORITY_ID>', High: '<HIGH_PRIORITY_ID>', Medium: '<MEDIUM_PRIORITY_ID>', Low: '<LOW_PRIORITY_ID>' })[$json.jiraPriority] }}"
+          }
+        },
+        "customFieldsUi": {
+          "customFieldsValues": [
+            {
+              "fieldId": { "__rl": true, "mode": "id", "value": "duedate" },
+              "fieldValue": "={{ $json.dueDate }}"
+            }
           ]
         }
       },
