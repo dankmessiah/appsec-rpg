@@ -1,0 +1,534 @@
+openapi: 3.0.3
+info:
+  title: AppSec RPG API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      summary: Check application and database connectivity
+      operationId: getHealth
+      responses:
+        '200':
+          description: Database is reachable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: Database is unavailable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+  /auth/register:
+    post:
+      summary: Register a player and create a session
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Register' }
+      responses:
+        '201': { $ref: '#/components/responses/Session' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /auth/login:
+    post:
+      summary: Authenticate and rotate the browser session
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Login' }
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post:
+      summary: Revoke the current session
+      operationId: logout
+      security:
+        - session: []
+          csrf: []
+      responses:
+        '204': { description: Session deleted }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /auth/me:
+    get:
+      summary: Read the current user and session CSRF token
+      operationId: getSession
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Current user and CSRF token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Error' }
+  /progress:
+    get:
+      summary: Read personal campaign and endless progress
+      operationId: getProgress
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Current player progress
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Progress' }
+        '401': { $ref: '#/components/responses/Error' }
+  /weak-spots:
+    get:
+      summary: Read up to 15 personal weak terms
+      operationId: getWeakSpots
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Weak terms and individual response counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [terms]
+                properties:
+                  terms:
+                    type: array
+                    maxItems: 15
+                    items: { $ref: '#/components/schemas/WeakTerm' }
+        '401': { $ref: '#/components/responses/Error' }
+  /battles:
+    post:
+      summary: Start a battle and forfeit any existing active battle
+      operationId: startBattle
+      security:
+        - session: []
+          csrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [mode]
+              properties:
+                mode: { type: string, enum: [campaign, endless] }
+      responses:
+        '201':
+          description: New battle and first public question
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Battle' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /battles/{id}/answer:
+    parameters:
+      - $ref: '#/components/parameters/BattleId'
+    post:
+      summary: Submit an answer to your current battle question
+      operationId: answerBattle
+      security:
+        - session: []
+          csrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/ChoiceAnswer'
+                - $ref: '#/components/schemas/TextAnswer'
+      responses:
+        '200':
+          description: Resolved answer and current battle state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Turn' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /battles/{id}/forfeit:
+    parameters:
+      - $ref: '#/components/parameters/BattleId'
+    post:
+      summary: Forfeit your active battle
+      operationId: forfeitBattle
+      security:
+        - session: []
+          csrf: []
+      responses:
+        '200':
+          description: Restarted progress and optional endless run summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [progress]
+                properties:
+                  progress: { $ref: '#/components/schemas/Progress' }
+                  runSummary: { $ref: '#/components/schemas/RunSummary' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /leaderboard:
+    get:
+      summary: List the top 20 endless players
+      operationId: getLeaderboard
+      responses:
+        '200':
+          description: Ranked endless scores
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    maxItems: 20
+                    items: { $ref: '#/components/schemas/LeaderboardEntry' }
+  /users/{id}/stats:
+    get:
+      summary: Read a player's public statistics
+      operationId: getUserStats
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 2147483647 }
+      responses:
+        '200':
+          description: Public statistics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserStats' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /admin/terms:
+    get:
+      summary: List terms as an administrator
+      operationId: listTerms
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Term bank
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [terms]
+                properties:
+                  terms:
+                    type: array
+                    items: { $ref: '#/components/schemas/Term' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      summary: Create a term as an administrator
+      operationId: createTerm
+      security:
+        - session: []
+          csrf: []
+      requestBody: { $ref: '#/components/requestBodies/Term' }
+      responses:
+        '201': { $ref: '#/components/responses/Term' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/terms/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/TermId' }
+    put:
+      summary: Replace a term as an administrator
+      operationId: updateTerm
+      security:
+        - session: []
+          csrf: []
+      requestBody: { $ref: '#/components/requestBodies/Term' }
+      responses:
+        '200': { $ref: '#/components/responses/Term' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      summary: Delete a term as an administrator
+      operationId: deleteTerm
+      security:
+        - session: []
+          csrf: []
+      responses:
+        '204': { description: Term deleted }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: sid
+    csrf:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  parameters:
+    BattleId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  requestBodies:
+    Term:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/TermInput' }
+  responses:
+    Session:
+      description: User and CSRF token with the new session cookie
+      headers:
+        Set-Cookie:
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Session' }
+    Error:
+      description: Request rejected
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Term:
+      description: Saved term
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Term' }
+  schemas:
+    Error:
+      type: object
+      required: [error, requestId]
+      properties:
+        error: { type: string }
+        requestId: { type: string, format: uuid }
+    Health:
+      type: object
+      required: [status, db]
+      properties:
+        status: { type: string, enum: [ok, unavailable] }
+        db: { type: boolean }
+    Username:
+      type: string
+      minLength: 3
+      maxLength: 20
+      pattern: '^[a-zA-Z0-9_-]+$'
+    Register:
+      type: object
+      additionalProperties: false
+      required: [username, email, password]
+      properties:
+        username: { $ref: '#/components/schemas/Username' }
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 12, maxLength: 72, description: Limited to 72 UTF-8 bytes }
+    Login:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: { $ref: '#/components/schemas/Username' }
+        password: { type: string, maxLength: 72, description: Limited to 72 UTF-8 bytes }
+    Session:
+      type: object
+      required: [user, csrfToken]
+      properties:
+        user:
+          type: object
+          required: [id, username, role]
+          properties:
+            id: { type: integer }
+            username: { $ref: '#/components/schemas/Username' }
+            role: { type: string, enum: [player, admin] }
+        csrfToken: { type: string, pattern: '^[0-9a-f]{64}$' }
+    Progress:
+      type: object
+      required: [player, campaign, endless]
+      properties:
+        player:
+          type: object
+          required: [hp, maxHp, xp, rank, combo]
+          properties:
+            hp: { type: integer }
+            maxHp: { type: integer }
+            xp: { type: integer }
+            rank: { type: string }
+            combo: { type: integer }
+        campaign:
+          type: object
+          required: [section, fight, cleared]
+          properties:
+            section: { $ref: '#/components/schemas/Section' }
+            fight: { type: integer, minimum: 0, maximum: 6 }
+            cleared:
+              type: array
+              minItems: 7
+              maxItems: 7
+              items: { type: boolean }
+        endless:
+          type: object
+          required: [kills, difficulty, unlocked]
+          properties:
+            kills: { type: integer }
+            difficulty: { type: integer }
+            unlocked: { type: boolean }
+    Enemy:
+      type: object
+      required: [name, type, section, hp, maxHp, attack]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [grunt, elite, boss] }
+        section: { $ref: '#/components/schemas/Section' }
+        hp: { type: integer }
+        maxHp: { type: integer }
+        attack: { type: integer }
+    Question:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [id, variant, prompt, timeLimitSeconds, startedAt]
+      properties:
+        id: { type: string, format: uuid }
+        variant: { type: string, enum: [definition, reverse, scenario, recall] }
+        prompt: { type: string }
+        options:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: string }
+        timeLimitSeconds: { type: integer }
+        startedAt: { type: integer, format: int64, description: Unix epoch milliseconds }
+    Battle:
+      type: object
+      required: [id, enemy, question, progress]
+      properties:
+        id: { type: string, format: uuid }
+        enemy: { $ref: '#/components/schemas/Enemy' }
+        question: { $ref: '#/components/schemas/Question' }
+        progress: { $ref: '#/components/schemas/Progress' }
+    ChoiceAnswer:
+      type: object
+      additionalProperties: false
+      required: [questionId, choice]
+      properties:
+        questionId: { type: string, format: uuid }
+        choice: { type: integer, minimum: 0, maximum: 3, description: Zero-based option index }
+    TextAnswer:
+      type: object
+      additionalProperties: false
+      required: [questionId, text]
+      properties:
+        questionId: { type: string, format: uuid }
+        text: { type: string, maxLength: 256 }
+    Turn:
+      type: object
+      required: [correct, timedOut, correctAnswer, explanation, damageDealt, damageTaken, status, earnedXp, rankUp, progress, enemy, question]
+      properties:
+        correct: { type: boolean }
+        timedOut: { type: boolean }
+        correctAnswer: { type: string }
+        explanation: { type: string }
+        damageDealt: { type: integer }
+        damageTaken: { type: integer }
+        status: { type: string, enum: [active, won, lost] }
+        earnedXp: { type: integer }
+        rankUp: { type: string, nullable: true }
+        progress: { $ref: '#/components/schemas/Progress' }
+        enemy: { $ref: '#/components/schemas/Enemy' }
+        question: { $ref: '#/components/schemas/Question' }
+        runSummary: { $ref: '#/components/schemas/RunSummary' }
+    RunSummary:
+      type: object
+      required: [kills, bestStreak]
+      properties:
+        kills: { type: integer }
+        bestStreak: { type: integer }
+    WeakTerm:
+      type: object
+      required: [id, term, section, correct, wrong, definition]
+      properties:
+        id: { $ref: '#/components/schemas/TermId' }
+        term: { type: string }
+        section: { $ref: '#/components/schemas/Section' }
+        correct: { type: integer }
+        wrong: { type: integer }
+        definition: { type: string }
+    LeaderboardEntry:
+      type: object
+      required: [userId, username, rank, bestKills, bestStreak]
+      properties:
+        userId: { type: integer }
+        username: { $ref: '#/components/schemas/Username' }
+        rank: { type: string }
+        bestKills: { type: integer }
+        bestStreak: { type: integer }
+    UserStats:
+      type: object
+      additionalProperties: false
+      required: [username, rank, bestKills, sectionsCleared]
+      properties:
+        username: { $ref: '#/components/schemas/Username' }
+        rank: { type: string }
+        bestKills: { type: integer }
+        sectionsCleared: { type: integer, minimum: 0, maximum: 7 }
+    Section:
+      type: integer
+      minimum: 0
+      maximum: 6
+    TermId:
+      type: string
+      maxLength: 120
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    TermInput:
+      type: object
+      required: [id, section, term, aliases, definition, drill_group_ids]
+      properties:
+        id: { $ref: '#/components/schemas/TermId' }
+        section: { $ref: '#/components/schemas/Section' }
+        term: { type: string, minLength: 1, maxLength: 256 }
+        aliases:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 256 }
+        definition: { type: string, minLength: 1, maxLength: 4000 }
+        scenario: { type: string, nullable: true, minLength: 1, maxLength: 4000 }
+        drill_group_ids:
+          type: array
+          uniqueItems: true
+          maxItems: 25
+          items: { $ref: '#/components/schemas/TermId' }
+    Term:
+      allOf:
+        - $ref: '#/components/schemas/TermInput'
+        - type: object
+          required: [is_top25, scenario]
+          properties:
+            is_top25: { type: boolean }
