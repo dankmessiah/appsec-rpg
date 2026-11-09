@@ -419,9 +419,11 @@ function renderFeedback(result, mode) {
       element('p', {}, 'Answer: ', element('strong', { text: result.correctAnswer })),
       element('p', { text: result.explanation })));
   if (result.status === 'won') {
-    feedback.append(element('p', { text: 'Enemy defeated. +' + result.earnedXp + ' XP' }),
-      result.rankUp && element('p', { text: 'Rank up: ' + state.progress.player.rank }),
-      xpReadout(state.progress.player));
+    feedback.append(element('p', { text: 'Enemy defeated. +' + result.earnedXp + ' XP' }));
+    if (result.rankUp) {
+      feedback.append(element('p', { text: 'Rank up: ' + state.progress.player.rank }));
+    }
+    feedback.append(xpReadout(state.progress.player));
   }
   const label = result.status === 'lost' ? 'See run result' :
     result.status === 'won' ? (mode === 'endless' ? 'Next enemy' : 'Back to map') : 'Continue';
