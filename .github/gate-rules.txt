@@ -1,0 +1,5 @@
+# Exact Semgrep SARIF rule ID and required severity.
+semgrep.rules.db-query-string-concat any
+javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection error
+javascript.lang.security.audit.code-string-concat.code-string-concat error
+javascript.express.security.audit.express-open-redirect.express-open-redirect error
