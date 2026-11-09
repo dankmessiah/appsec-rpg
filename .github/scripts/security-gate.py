@@ -118,7 +118,10 @@ def secret_findings(doc):
 
 def trivy_findings(doc, kind):
     expect_object(doc, "Trivy report")
-    if doc.get("SchemaVersion") != 2 or doc.get("ArtifactType") != kind:
+    # Trivy classifies the primary checkout as a repository and a linked
+    # worktree with a .git pointer file as a filesystem.
+    artifact_types = {"filesystem": ("repository", "filesystem"), "container_image": ("container_image",)}
+    if doc.get("SchemaVersion") != 2 or doc.get("ArtifactType") not in artifact_types.get(kind, ()):
         raise EvidenceError(f"Invalid Trivy {kind} report")
     required_string(doc.get("ArtifactName"), "Trivy artifact name")
     findings = []
@@ -334,7 +337,7 @@ def evaluate(root, rules_path, needs):
         for report in reports:
             sarif_runs(read_json(report), "CodeQL")
     candidates = []
-    targets = [("gate-trivy-fs", "repository")]
+    targets = [("gate-trivy-fs", "filesystem")]
     if dockerfile:
         targets.append(("gate-trivy-image", "container_image"))
     for artifact, kind in targets:

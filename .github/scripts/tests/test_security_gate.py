@@ -86,7 +86,7 @@ class GateTests(unittest.TestCase):
             trivy("two/package-lock.json", PkgIdentifier={"PURL": "pkg:npm/example@1.1"}),
             trivy("two/package-lock.json", package="another"),
         )
-        self.assertEqual(len(gate.new_critical(head, old, "repository")), 2)
+        self.assertEqual(len(gate.new_critical(head, old, "filesystem")), 2)
 
     def test_trivy_os_image_labels_and_npm_paths(self):
         old_os = trivy("base:tag (alpine 3.24.1)", package="zlib")
@@ -101,11 +101,17 @@ class GateTests(unittest.TestCase):
 
     def test_trivy_rejects_noncritical_unfixed_and_unexpected_absence(self):
         head = report(trivy("one", FixedVersion=""), trivy("two", Severity="HIGH"))
-        self.assertEqual(gate.new_critical(head, report(), "repository"), [])
+        self.assertEqual(gate.new_critical(head, report(), "filesystem"), [])
         with self.assertRaises(gate.EvidenceError):
-            gate.new_critical(head, {"baseline": "no-dockerfile"}, "repository")
+            gate.new_critical(head, {"baseline": "no-dockerfile"}, "filesystem")
         with self.assertRaises(gate.EvidenceError):
-            gate.new_critical(head, {}, "repository")
+            gate.new_critical(head, {}, "filesystem")
+        with self.assertRaises(gate.EvidenceError):
+            gate.new_critical(head, report(kind="unexpected"), "filesystem")
+        with self.assertRaises(gate.EvidenceError):
+            gate.new_critical(head, report(kind="container_image"), "filesystem")
+        with self.assertRaises(gate.EvidenceError):
+            gate.new_critical(head, report(kind="filesystem"), "container_image")
         image = report(trivy("Node.js"), kind="container_image")
         self.assertEqual(len(gate.new_critical(image, {"baseline": "no-dockerfile"}, "container_image")), 1)
 
@@ -163,7 +169,7 @@ class GateTests(unittest.TestCase):
                 ]}
             ]),
             "gate-trivy-fs/head.json": report(),
-            "gate-trivy-fs/base.json": report(),
+            "gate-trivy-fs/base.json": report(kind="filesystem"),
         }
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
