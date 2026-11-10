@@ -38,6 +38,12 @@ The precise Semgrep IDs and thresholds are in `.github/gate-rules.txt`. Effectiv
 2. Require GitHub code scanning results from CodeQL at High or higher severity.
 3. Verify a clean PR passes. Verify an unmerged `demo/gate-sqli` PR with a deliberately concatenated `db.query` fails the gate and capture sanitized evidence.
 
+## Recorded blocking proof
+
+[Deliberate SQL injection PR #18](https://github.com/dankmessiah/appsec-rpg/pull/18) was closed without merging. The captured run shows the `gate` job failing specifically at `Evaluate PR findings`, while the scanner jobs completed successfully. This distinguishes a policy rejection from a scanner execution failure. The screenshot records the job result, not the historical merge-button state or detailed logs.
+
+![SQL injection drill: gate failed at Evaluate PR findings](screenshots/3-4-gate-blocked.png)
+
 ## Exceptions and review
 
 - A false positive requires AppSec review through CODEOWNERS. Use a justified inline `nosemgrep` annotation with a ticket or a reviewed `.gitleaks.toml` allowlist entry.
