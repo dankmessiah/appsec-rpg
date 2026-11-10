@@ -21,7 +21,7 @@ Webhook ─▶ 1 Ingest ─▶ 2 Enrich ─▶ 3 Dedupe ─▶ 4 Route
 
 1. **Ingest**: one item per finding from SARIF 2.1.0 (Semgrep, Gitleaks, CodeQL, Trivy), ZAP `traditional-json`, or flat `findings[]` (BOLA check). Gitleaks/secret findings are forced to Critical.
 2. **Enrich**: owner from a mock CODEOWNERS per repo (last match wins), app tier (appsec-rpg = 1, juice-shop = 3), exposure, data class, SLA due date from `raci.md` (Critical 7 d, High 30, Medium 90, Low 180), and the dedupe key. Severity is bumped High → Critical for a Tier 1 app when the finding is runtime-confirmed (DAST/secret) and high-confidence.
-3. **Dedupe**: key = `repo|rule|file|line` (SAST) or `repo|rule|url-without-query|param` (DAST); remembered across executions (10 000 keys), so a re-run of the same PR doesn't re-ticket.
+3. **Dedupe**: remove repeated keys within the current input first, keeping the first item and all its fields, then compare against historical keys. Key = `repo|rule|file|line` (SAST) or `repo|rule|url-without-query|param` (DAST); remembered across executions (10 000 keys), so a re-run of the same PR doesn't re-ticket.
 4. **Route**: every finding becomes a Jira ticket. If Jira fails, Discord gets a warning, so failures aren't silent. Critical findings also get a Discord alert and a Wazuh event (JSON with `appsec_lab: true`, tool, rule, owner, Jira key, runbook link).
 
 ## Verified evidence (2026-11-08)
@@ -37,6 +37,16 @@ The earlier pinned execution 12787 simulated external calls and is not live-deli
 TLS hardening verified on 2026-11-08 (local date): the Wazuh API now presents a certificate with a matching endpoint identity, signed by a dedicated local CA. n8n mounts the public CA read-only and loads it through `NODE_EXTRA_CA_CERTS`. A request from inside the running n8n container returned HTTP 401 with `tlsAuthorized: true`, proving certificate and hostname validation without sending credentials or creating events. Both published Wazuh nodes explicitly set `allowUnauthorizedCerts: false`. Certificate and Compose backups were retained; all Wazuh services were active after the authorized restart. This is transport verification, not a second alert-delivery test.
 
 The old webhook execution 13252 was deleted with owner approval after token rotation. The earlier pinned simulation 12787 remains. The stale duplicate vault item ID from the handoff was no longer present when cleanup was attempted; the active ingest-token item was not changed.
+
+## Offline routing regression verification (2026-11-10)
+
+The sanitized export resolves SARIF descriptors within their declared driver or extension component. Conflicting or unresolved explicit references fail with a SARIF descriptor error instead of silently downgrading severity. The current-input Remove Duplicates v2 node now precedes the existing historical node; that historical node and its settings are preserved.
+
+Run `node --test tests/unit/ingest-routing.test.js` or `npm test -- --runTestsByPath tests/unit/ingest-routing.test.js`. The regression cases first reproduced the old failures (1 passed, 15 failed), then passed after repair. They cover extension and driver references, malformed or ambiguous references, severity/confidence/SLA, clean reports, secret tags, ZAP, graph order, and documented current-input/historical dedupe semantics. The native node parameters passed the connected n8n schema validator. Dedupe behavior in these tests is a local model of documented native semantics, not an actual n8n execution.
+
+Offline replay of the verified SQLi drill reports produced CodeQL High/high/30 days and reduced the two same-key Semgrep results to one representative entering historical dedupe. The reports remain outside the repository; test inputs use minimal representative metadata without source snippets.
+
+A separate unpublished regression workflow then executed the actual native dedupe node with harmless synthetic reports. It confirmed three results become two findings with correct severity, SLA, preserved fields and item links. That test contained no credentials or delivery nodes. The owner approved publication of the repaired ingest workflow, which is now active with historical dedupe preserved. APPSEC-33 was corrected to High, high confidence, a 30-day SLA and December 10, 2026 due date. APPSEC-35 was linked as a duplicate of APPSEC-34 and moved to Done; APPSEC-34 remains open. The corrections were verified after reloading Jira, without sending another finding.
 
 ## Setup (Nunzio)
 
