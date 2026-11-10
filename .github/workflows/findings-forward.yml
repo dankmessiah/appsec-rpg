@@ -2,6 +2,7 @@
 # n8n is LAN-only, so this runs on the homelab self-hosted runner after the scan workflows finish.
 #
 # Repo variables: HOMELAB_RUNNER_READY=true, N8N_INGEST_URL=https://n8n.home.arpa/webhook/appsec-ingest
+#                 APPSEC_FORWARD_CUTOVER_EPOCH optionally splits security run ownership by creation time.
 # Repo secrets:   N8N_INGEST_TOKEN (same value as the n8n "AppSec ingest token" Header Auth credential)
 # Runner:         trusts the Caddy root CA, or set variable N8N_CA_FILE to its path on the runner.
 name: findings-forward
@@ -15,9 +16,35 @@ permissions:
   contents: read
 
 jobs:
+  route:
+    # An unset cutover preserves legacy ownership. An invalid epoch fails this job.
+    # Earlier security runs keep legacy ownership for every rerun. Proposed runner
+    # retirement requires a 30-day drain plus resolution of older in-flight work.
+    if: >-
+      vars.HOMELAB_RUNNER_READY == 'true' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      legacy: ${{ steps.owner.outputs.legacy }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Classify forwarding ownership
+        id: owner
+        env:
+          APPSEC_FORWARD_CUTOVER_EPOCH: ${{ vars.APPSEC_FORWARD_CUTOVER_EPOCH }}
+          APPSEC_PRIVATE_NIGHTLY_ACTIVE: ${{ vars.APPSEC_PRIVATE_NIGHTLY_ACTIVE }}
+        run: python3 .github/scripts/classify-forward-owner.py
+
   forward:
+    needs: route
     # Only runs from this repo's own branches (never fork PR artifacts) and only once the runner exists.
     if: >-
+      needs.route.outputs.legacy == 'true' &&
       vars.HOMELAB_RUNNER_READY == 'true' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.conclusion != 'cancelled'
