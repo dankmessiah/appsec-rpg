@@ -44,7 +44,9 @@ The sanitized export resolves SARIF descriptors within their declared driver or 
 
 Run `node --test tests/unit/ingest-routing.test.js` or `npm test -- --runTestsByPath tests/unit/ingest-routing.test.js`. The regression cases first reproduced the old failures (1 passed, 15 failed), then passed after repair. They cover extension and driver references, malformed or ambiguous references, severity/confidence/SLA, clean reports, secret tags, ZAP, graph order, and documented current-input/historical dedupe semantics. The native node parameters passed the connected n8n schema validator. Dedupe behavior in these tests is a local model of documented native semantics, not an actual n8n execution.
 
-Offline replay of the verified SQLi drill reports produced CodeQL High/high/30 days and reduced the two same-key Semgrep results to one representative entering historical dedupe. The reports remain outside the repository; test inputs use minimal representative metadata without source snippets. This export is a proposed repair and does not claim live publication or corrective ticket edits.
+Offline replay of the verified SQLi drill reports produced CodeQL High/high/30 days and reduced the two same-key Semgrep results to one representative entering historical dedupe. The reports remain outside the repository; test inputs use minimal representative metadata without source snippets.
+
+A separate unpublished regression workflow then executed the actual native dedupe node with harmless synthetic reports. It confirmed three results become two findings with correct severity, SLA, preserved fields and item links. That test contained no credentials or delivery nodes. The owner approved publication of the repaired ingest workflow, which is now active with historical dedupe preserved. APPSEC-33 was corrected to High, high confidence, a 30-day SLA and December 10, 2026 due date. APPSEC-35 was linked as a duplicate of APPSEC-34 and moved to Done; APPSEC-34 remains open. The corrections were verified after reloading Jira, without sending another finding.
 
 ## Setup (Nunzio)
 
