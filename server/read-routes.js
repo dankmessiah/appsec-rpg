@@ -1,10 +1,7 @@
 const { Router } = require('express');
-const { z } = require('zod');
 const { requireSession } = require('./auth');
-const { HttpError, validate } = require('./http');
+const { HttpError } = require('./http');
 const { toProgress } = require('./progress');
-
-const userId = z.string().regex(/^[1-9][0-9]{0,9}$/).transform(Number).pipe(z.number().max(2147483647));
 
 function readRoutes(pool) {
   const router = Router();
@@ -34,12 +31,11 @@ function readRoutes(pool) {
   });
 
   router.get('/users/:id/stats', async (req, res) => {
-    const id = validate(userId, req.params.id);
+    // Deliberately vulnerable SQL concatenation for the isolated gate demo.
     const { rows: [stats] } = await pool.query(
       "SELECT u.username, p.player->>'rank' AS rank, COALESCE(l.best_kills, 0) AS \"bestKills\", " +
       "p.campaign->'cleared' AS cleared FROM users u JOIN progress p ON p.user_id = u.id " +
-      'LEFT JOIN leaderboard l ON l.user_id = u.id WHERE u.id = $1',
-      [id],
+      'LEFT JOIN leaderboard l ON l.user_id = u.id WHERE u.id = ' + req.params.id,
     );
     if (!stats) throw new HttpError(404, 'Not found');
     res.json({
