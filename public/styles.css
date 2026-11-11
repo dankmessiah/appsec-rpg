@@ -192,7 +192,7 @@ input {
 }
 .fighter { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; align-items: center; gap: .25rem .75rem; min-inline-size: 0; }
 .fighter h2 { font-size: clamp(.875rem, 2vw, 1.125rem); overflow-wrap: anywhere; }
-.fighter-art { inline-size: min(100%, 8rem); aspect-ratio: 1; object-fit: contain; justify-self: center; }
+.fighter-art { inline-size: min(100%, 10rem); aspect-ratio: 1; object-fit: contain; justify-self: center; }
 .fighter .readout { min-inline-size: 0; }
 .readout label { display: block; margin-block-end: .25rem; }
 .measure { font-size: .875rem; color: var(--muted); }
@@ -283,7 +283,7 @@ td { overflow-wrap: anywhere; }
   .map-layout { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
   .sector { padding: 1rem 0; gap: 1rem; }
   .answers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .fighter { grid-template-columns: clamp(7rem, 14vw, 12rem) minmax(0, 1fr); align-content: center; }
+  .fighter { grid-template-columns: clamp(10rem, 24vw, 20rem) minmax(0, 1fr); align-content: center; }
   .fighter-art { grid-row: 1 / 4; inline-size: 100%; }
   .public-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
