@@ -13,18 +13,26 @@ The SOAR layer for Week 2. Scanner output goes in; owner-routed Jira tickets com
 ## Stages (one node group each, for screenshots)
 
 ```
-Webhook ─▶ 1 Ingest ─▶ 2 Enrich ─▶ 3 Dedupe ─▶ 4 Route
+Webhook â”€â–¶ 1 Ingest â”€â–¶ 2 Enrich â”€â–¶ 3 Dedupe â”€â–¶ 4 Route
            Normalize    Owner/tier/   Remove dupes    Jira APPSEC (all, SLA due date)
-           SARIF, ZAP,  exposure,     seen in prior     └─ error ─▶ Discord "ticket failed"
-           findings[]   SLA, key      executions       Is Critical? ─▶ Discord #appsec-alerts ─▶ Wazuh /events
+           SARIF, ZAP,  exposure,     seen in prior     â””â”€ error â”€â–¶ Discord "ticket failed"
+           findings[]   SLA, key      executions       Is Critical? â”€â–¶ Discord #appsec-alerts â”€â–¶ Wazuh /events
 ```
 
 1. **Ingest**: one item per finding from SARIF 2.1.0 (Semgrep, Gitleaks, CodeQL, Trivy), ZAP `traditional-json`, or flat `findings[]` (BOLA check). Gitleaks/secret findings are forced to Critical.
-2. **Enrich**: owner from a mock CODEOWNERS per repo (last match wins), app tier (appsec-rpg = 1, juice-shop = 3), exposure, data class, SLA due date from `raci.md` (Critical 7 d, High 30, Medium 90, Low 180), and the dedupe key. Severity is bumped High → Critical for a Tier 1 app when the finding is runtime-confirmed (DAST/secret) and high-confidence.
+2. **Enrich**: owner from a mock CODEOWNERS per repo (last match wins), app tier (appsec-rpg = 1, juice-shop = 3), exposure, data class, SLA due date from `raci.md` (Critical 7 d, High 30, Medium 90, Low 180), and the dedupe key. Severity is bumped High â†’ Critical for a Tier 1 app when the finding is runtime-confirmed (DAST/secret) and high-confidence.
 3. **Dedupe**: remove repeated keys within the current input first, keeping the first item and all its fields, then compare against historical keys. Key = `repo|rule|file|line` (SAST) or `repo|rule|url-without-query|param` (DAST); remembered across executions (10 000 keys), so a re-run of the same PR doesn't re-ticket.
 4. **Route**: every finding becomes a Jira ticket. If Jira fails, Discord gets a warning, so failures aren't silent. Critical findings also get a Discord alert and a Wazuh event (JSON with `appsec_lab: true`, tool, rule, owner, Jira key, runbook link).
 
 ## Verified evidence (2026-11-08)
+
+### Stage and Jira captures
+
+- [Ingest](../screenshots/2-1-ingest.png) and [enrichment](../screenshots/2-2-enrich.png) show the historical configuration canvas, not execution results.
+- [Deduplication](../screenshots/2-3-dedupe.png) shows the historical draft canvas with the historical-key node expanded. Its Publish button is not proof of live publication, and the image predates the later same-input deduplication repair.
+- [Synthetic Jira ticket APPSEC-4](../screenshots/2-4-jira.png) shows the authorized fake-secret routing result, descriptive owner, native Highest priority and November 15, 2026 due date. Its example commit and run link are fixture data, not a real secret finding.
+
+The routing canvas is omitted because it exposes private infrastructure details. Its configuration routes all findings to Jira and Critical findings onward to Discord and Wazuh; the direct delivery observations below provide the result evidence. The handoff permits written evidence when a capture cannot be cleanly redacted. These four images are unaltered captures and do not prove the current workflow version.
 
 ### Follow-up delivery inspection (2026-11-10)
 
@@ -56,10 +64,10 @@ A separate unpublished regression workflow then executed the actual native dedup
 
 ## Setup (Nunzio)
 
-1. **Credentials** in n8n (Credentials → Add):
+1. **Credentials** in n8n (Credentials â†’ Add):
    - *AppSec ingest token*: Header Auth, name `X-AppSec-Token`, value = a random 32-byte hex (`openssl rand -hex 32`). Put the same value in GitHub secret `N8N_INGEST_TOKEN`. **Then open the webhook node and select the dedicated ingest credential.** Do not reuse another service's token.
    - *Jira APPSEC*: Jira SW Cloud API (email + API token).
-   - *Discord AppSec bot*: Discord Bot API. Create the bot at discord.com/developers → New Application → Bot → Reset Token, then invite it to your server with *Send Messages* on `#appsec-alerts`.
+   - *Discord AppSec bot*: Discord Bot API. Create the bot at discord.com/developers â†’ New Application â†’ Bot â†’ Reset Token, then invite it to your server with *Send Messages* on `#appsec-alerts`.
    - *Wazuh API user*: Basic Auth, a Wazuh API user with the `event:ingest` permission. If Wazuh's API uses a self-signed cert, add its CA to n8n (`NODE_EXTRA_CA_CERTS`) rather than disabling TLS checks.
 2. In the workflow: pick **project APPSEC** and **issue type Task** in *Create APPSEC Jira Ticket*, and the **server** and **#appsec-alerts** in both Discord nodes. Replace the four priority-ID placeholders with your Jira instance's IDs for Highest, High, Medium, and Low. The system field `duedate` uses `YYYY-MM-DD`. Check the Wazuh URL (`https://wazuh.home.arpa:55000`).
 3. Test: *Execute workflow* (test URL), then
@@ -68,7 +76,7 @@ A separate unpublished regression workflow then executed the actual native dedup
      -H "X-AppSec-Token: $TOKEN" -H 'Content-Type: application/json' \
      --data @docs/lab/n8n/samples/sample-payload.json
    ```
-   Expect 2 Critical tickets, 2 Discord alerts and 2 Wazuh events. Screenshot each stage: `2-1-ingest.png` … `2-4-route.png`, `2-4-jira.png`, `2-4-discord.png`, `2-4-wazuh.png`.
+   Expect 2 Critical tickets, 2 Discord alerts and 2 Wazuh events. Screenshot each stage: `2-1-ingest.png` â€¦ `2-4-route.png`, `2-4-jira.png`, `2-4-discord.png`, `2-4-wazuh.png`.
 4. **Publish** an imported workflow after setup. The existing lab workflow is already published.
 5. GitHub: variable `N8N_INGEST_URL=https://n8n.home.arpa/webhook/appsec-ingest`, secret `N8N_INGEST_TOKEN`; and on the runner, either trust the Caddy root CA system-wide or set variable `N8N_CA_FILE` to its path.
 
@@ -101,4 +109,4 @@ Scanner traffic itself is identifiable by User-Agent `appsec-lab-scanner`; tag o
 | Code (normalize, enrich) | Event Transform (message-only / explode / implode) |
 | Remove Duplicates (cross-execution) | Deduplicate action with lookback |
 | Jira / Discord / HTTP | HTTP Request actions with Credentials + Resources (owner map, SLA table as a Resource) |
-| Error output → Discord | Action-level error handling / Monitor failures |
+| Error output â†’ Discord | Action-level error handling / Monitor failures |
