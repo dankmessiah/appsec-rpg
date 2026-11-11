@@ -25,7 +25,9 @@ async function writeTerm(pool, term, update) {
     if (groups.rowCount !== drill_group_ids.length) throw new HttpError(400, 'Invalid drill group');
     const values = [id, section, term.term, aliases, definition, scenario ?? null, drill_group_ids];
     const sql = update
-      ? 'UPDATE terms SET section = $2, term = $3, aliases = $4, definition = $5, scenario = $6, drill_group_ids = $7 WHERE id = $1 RETURNING *'
+      ? 'UPDATE terms SET explanation = CASE WHEN (section, term, aliases, definition, scenario) ' +
+        'IS DISTINCT FROM ($2::integer, $3::text, $4::text[], $5::text, $6::text) THEN NULL ELSE explanation END, ' +
+        'section = $2, term = $3, aliases = $4, definition = $5, scenario = $6, drill_group_ids = $7 WHERE id = $1 RETURNING *'
       : 'INSERT INTO terms (id, section, term, aliases, definition, scenario, drill_group_ids) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING RETURNING *';
     const { rows: [saved] } = await client.query(sql, values);
     if (!saved) throw update ? new HttpError(404, 'Not found') : new HttpError(409, 'Term already exists');

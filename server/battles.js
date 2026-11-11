@@ -17,6 +17,7 @@ const answerSchema = z.union([
   z.strictObject({ questionId: uuidSchema, choice: z.int().min(0).max(3) }),
   z.strictObject({ questionId: uuidSchema, text: z.string().trim().max(256) }),
 ]);
+const advanceSchema = z.strictObject({ questionId: uuidSchema });
 const emptyBody = z.strictObject({}).optional();
 
 async function lockProgress(client, userId) {
@@ -86,7 +87,27 @@ async function abandon(client, battle, userId, progress, bestStreak) {
 
 function battleRoutes({ pool, now }) {
   const router = Router();
-  router.use('/battles', requireSession, requireCsrf);
+  router.use('/battles', requireSession);
+
+  router.get('/battles/current', async (req, res) => {
+    const userId = req.session.id;
+    const response = await transaction(pool, async client => {
+      const row = await lockProgress(client, userId);
+      const { rows: [battle] } = await client.query(
+        "SELECT * FROM battles WHERE user_id = $1 AND status = 'active' FOR UPDATE", [userId],
+      );
+      if (!battle) return { battle: null };
+      return { battle: {
+        id: battle.id, mode: battle.mode, enemy: battle.enemy, progress: toProgress(row),
+        question: battle.awaiting_advance ? null : publicQuestion(battle.question),
+        result: battle.awaiting_advance ? battle.last_feedback : null,
+        ...(battle.awaiting_advance && { answeredQuestionId: battle.question.id }),
+      } };
+    });
+    res.json(response);
+  });
+
+  router.use('/battles', requireCsrf);
 
   router.post('/battles', async (req, res) => {
     const { mode, replaceActive } = validate(startSchema, req.body);
@@ -132,7 +153,7 @@ function battleRoutes({ pool, now }) {
       const row = await lockProgress(client, userId);
       const battle = await lockOwnedBattle(client, id, userId);
       const { question, enemy, mode } = battle;
-      if (question.id !== submission.questionId) throw new HttpError(409, 'Question is stale');
+      if (battle.awaiting_advance || question.id !== submission.questionId) throw new HttpError(409, 'Question is stale');
       if ((typeof question.answer === 'number') !== ('choice' in submission)) throw new HttpError(400, 'Invalid request');
 
       const result = checkAnswer(question, submission, receivedAt);
@@ -151,20 +172,41 @@ function battleRoutes({ pool, now }) {
         }
       }
       await saveProgress(client, userId, turn.progress, bestStreak);
-      const next = turn.status === 'active'
-        ? await nextQuestion(client, userId, turn.enemy, mode, mode === 'endless' ? turn.progress.endless.difficulty : 0, now)
-        : null;
-      await client.query(
-        "UPDATE battles SET enemy = $2, question = $3, no_damage = $4, status = $5, ended_at = CASE WHEN $5 = 'active' THEN NULL ELSE now() END WHERE id = $1",
-        [id, turn.enemy, next ?? question, turn.noDamage, turn.status],
-      );
-      return {
+      const feedback = {
         correct: result.correct, timedOut: result.timedOut, correctAnswer: result.correctAnswer,
         explanation: result.explanation, damageDealt: turn.damageDealt, damageTaken: turn.damageTaken,
         status: turn.status, earnedXp: turn.earnedXp, rankUp: turn.rankUp,
-        progress: turn.progress, enemy: turn.enemy, question: next ? publicQuestion(next) : null,
+        progress: turn.progress, enemy: turn.enemy, question: null,
         ...(runSummary && { runSummary }),
       };
+      await client.query(
+        "UPDATE battles SET enemy = $2, question = $3, awaiting_advance = ($5 = 'active'), advanced_from = NULL, no_damage = $4, status = $5, last_feedback = $6, ended_at = CASE WHEN $5 = 'active' THEN NULL ELSE now() END WHERE id = $1",
+        [id, turn.enemy, question, turn.noDamage, turn.status, feedback],
+      );
+      return feedback;
+    });
+    res.json(response);
+  });
+
+  router.post('/battles/:id/advance', async (req, res) => {
+    const id = validate(uuidSchema, req.params.id);
+    const { questionId } = validate(advanceSchema, req.body);
+    const userId = req.session.id;
+    const response = await transaction(pool, async (client) => {
+      const row = await lockProgress(client, userId);
+      const battle = await lockOwnedBattle(client, id, userId);
+      if (!battle.awaiting_advance) {
+        if (battle.advanced_from !== questionId) throw new HttpError(409, 'Question is stale');
+        return { question: publicQuestion(battle.question) };
+      }
+      if (battle.question.id !== questionId) throw new HttpError(409, 'Question is stale');
+      const question = await nextQuestion(client, userId, battle.enemy, battle.mode,
+        battle.mode === 'endless' ? row.endless.difficulty : 0, now);
+      await client.query(
+        'UPDATE battles SET question = $2, awaiting_advance = false, advanced_from = $3 WHERE id = $1',
+        [id, question, questionId],
+      );
+      return { question: publicQuestion(question) };
     });
     res.json(response);
   });

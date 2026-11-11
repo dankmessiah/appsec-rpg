@@ -140,6 +140,24 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+  /battles/current:
+    get:
+      summary: Recover your current active fight without changing its deadline
+      description: Returns only the signed-in user's active battle. Unanswered questions exclude answer fields. Resolved feedback is returned only while waiting for Continue. Completed or forfeited fights return null.
+      operationId: currentBattle
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Current active battle or null when no fight is active
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [battle]
+                properties:
+                  battle: { $ref: '#/components/schemas/CurrentBattle' }
+        '401': { $ref: '#/components/responses/Error' }
   /battles/{id}/answer:
     parameters:
       - $ref: '#/components/parameters/BattleId'
@@ -159,10 +177,45 @@ paths:
                 - $ref: '#/components/schemas/TextAnswer'
       responses:
         '200':
-          description: Resolved answer and current battle state
+          description: Resolved answer and current battle state. Question is always null during feedback; call advance with the answered question ID to start the next timer.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Turn' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /battles/{id}/advance:
+    parameters:
+      - $ref: '#/components/parameters/BattleId'
+    post:
+      summary: Start the next question after reading feedback
+      description: Keyed to the answered question. Retrying before answering the next question returns that same question and deadline. Stale, foreign, or inactive requests cannot advance a battle.
+      operationId: advanceBattle
+      security:
+        - session: []
+          csrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [questionId]
+              properties:
+                questionId: { type: string, format: uuid, description: ID of the answered question whose feedback is displayed }
+      responses:
+        '200':
+          description: Public question with its original server start time; never includes an answer or explanation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [question]
+                properties:
+                  question: { $ref: '#/components/schemas/Question' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
@@ -478,6 +531,23 @@ components:
         enemy: { $ref: '#/components/schemas/Enemy' }
         question: { $ref: '#/components/schemas/Question' }
         runSummary: { $ref: '#/components/schemas/RunSummary' }
+    CurrentBattle:
+      type: object
+      nullable: true
+      required: [id, mode, enemy, progress, question, result]
+      properties:
+        id: { type: string, format: uuid }
+        mode: { type: string, enum: [campaign, endless] }
+        enemy: { $ref: '#/components/schemas/Enemy' }
+        progress: { $ref: '#/components/schemas/Progress' }
+        question: { $ref: '#/components/schemas/Question' }
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/Turn'
+            - type: object
+              nullable: true
+              enum: [null]
+        answeredQuestionId: { type: string, format: uuid }
     RunSummary:
       type: object
       required: [kills, bestStreak]

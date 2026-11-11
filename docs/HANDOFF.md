@@ -1,0 +1,7 @@
+# First-play handoff
+
+The approved integrated plan is `docs/superpowers/plans/2026-11-10-first-play.md`. Implementation, test evidence, migration requirements, limitations and local preview are recorded in `docs/superpowers/plans/first-play-report.md`.
+
+Install: `npm ci --ignore-scripts`. Upgrade an existing installation: `node --env-file-if-exists=.env db/migrate-first-play.js`. Run: `npm start`. Test: set `NODE_ENV=test` and `DATABASE_URL` to a disposable PostgreSQL database whose name ends in `_test`, then run `npm test -- --silent`. README documents the existing fresh-install Docker workflow. The local disposable preview is at http://127.0.0.1:3217.
+
+Plan coverage: server advance/timing and client Continue are implemented; compact artwork/HP and mobile long answers were checked in Chrome; practice is local with no reward mutations; all sector-zero terms have teaching examples; additive migration preserves existing rows. Active-battle refresh and lost-response recovery are implemented and covered by API/client tests. Final suite after the admin-feedback review correction: 10 suites, 83 tests passed. Admin teaching-field edits clear obsolete feedback; no-op and drill-group-only edits preserve it. Terminal lost responses recover saved progress without replaying their summary. Independent recovery browser checks passed. The rendered boss/defeat/retry and endless-tier/forfeit/leaderboard runner also passed; see report for screenshots and rerun commands. No deployment, push, merge or live infrastructure work is included.

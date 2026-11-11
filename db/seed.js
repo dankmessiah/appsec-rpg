@@ -4,6 +4,8 @@ const bcrypt = require('bcrypt');
 const { createPool, transaction } = require('../server/db');
 const { initializeProgress } = require('../server/progress');
 
+const { applyFirstPlay } = require('./migrate-first-play');
+
 const accounts = { alice: 'player', bob: 'player', admin: 'admin' };
 
 async function seed({ pool, passwords, rotatePasswords = false }) {
@@ -30,6 +32,7 @@ async function seed({ pool, passwords, rotatePasswords = false }) {
         [id, section, term, aliases, definition, scenario ?? null, drill_group_ids],
       );
     }
+    await applyFirstPlay(client);
     for (const [username, role] of Object.entries(accounts)) {
       const email = username + '@appsec-rpg.invalid';
       const { rows: [existing] } = await client.query('SELECT id, email, role FROM users WHERE username = $1 FOR UPDATE', [username]);

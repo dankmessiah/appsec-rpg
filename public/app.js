@@ -21,6 +21,7 @@ const state = {
   progress: null,
   battle: null,
   result: null,
+  practice: null,
   busy: false
 };
 let timerReadout;
@@ -158,6 +159,7 @@ function show(screen, data) {
     auth: renderAuth,
     map: renderMap,
     battle: renderBattle,
+    practice: renderFirstPlay,
     defeat: renderDefeat,
     weak: renderWeak,
     leaderboard: renderLeaderboard,
@@ -170,6 +172,14 @@ function show(screen, data) {
 }
 
 async function loadMap() {
+  const { battle } = await api('/battles/current');
+  if (battle) {
+    state.progress = battle.progress;
+    state.battle = battle;
+    state.result = battle.result ? { ...battle.result, unlockAt: performance.now() + (battle.result.correct ? 0 : 3000) } : null;
+    show('battle');
+    return;
+  }
   state.progress = await api('/progress');
   state.battle = null;
   state.result = null;
@@ -288,6 +298,7 @@ function renderMap() {
     element('h2', { text: player.rank }),
     sprite(allCleared ? 'player_victory' : 'player_idle'),
     xpReadout(player),
+    button('Replay first-fight practice', openFirstPlay, 'quiet'),
     element('p', { className: 'measure', text: 'HP ' + player.hp + ' / ' + player.maxHp }));
   const endlessCard = element('section', { className: 'panel endless-card' },
     element('h2', { text: 'Endless arena' }),
@@ -301,18 +312,88 @@ function renderMap() {
     element('div', { className: 'map-layout' }, track, element('div', { className: 'stack' }, operator, endlessCard)));
 }
 
-function startBattle(mode) {
-  perform(async () => {
-    const battle = await api('/battles', { method: 'POST', body: { mode } });
-    state.progress = battle.progress;
-    state.battle = { ...battle, mode };
-    state.result = null;
-    show('battle');
+const dismissedFirstPlay = new Set();
+function firstPlayKey() { return 'appsec-first-play:' + state.session.user.id; }
+function needsFirstPlay() {
+  const { player, campaign } = state.progress;
+  if (player.xp > 0 || campaign.section > 0 || campaign.fight > 0 || campaign.cleared.some(Boolean)) return false;
+  if (dismissedFirstPlay.has(firstPlayKey())) return false;
+  try { return localStorage.getItem(firstPlayKey()) !== 'done'; } catch { return true; }
+}
+function dismissFirstPlay() {
+  dismissedFirstPlay.add(firstPlayKey());
+  try { localStorage.setItem(firstPlayKey(), 'done'); } catch { /* Storage may be disabled. */ }
+}
+function openFirstPlay() {
+  state.practice = { phase: 'intro', correct: null };
+  show('practice');
+}
+function answerPractice(choice) {
+  state.practice.correct = choice === 0;
+  show('practice');
+}
+function finishPractice() {
+  dismissFirstPlay();
+  state.practice = { phase: 'ready', correct: null };
+  show('practice');
+}
+function renderFirstPlay() {
+  const practice = state.practice;
+  const intro = element('section', { className: 'panel console practice' },
+    heading('Before your first fight', 'Practice is untimed. It does not change HP, combo, XP or campaign progress.'),
+    element('p', { text: 'Real fights have a timer for each question. Correct answers deal damage; faster answers hit harder. Wrong answers or timeouts cost HP and reset your combo.' }),
+    element('p', { text: 'Consecutive correct answers build your combo. Defeating enemies awards XP and can raise your rank. If you lose all HP or forfeit, your current section restarts at fight one. Earned XP is kept.' }),
+    element('p', { text: 'After an answer, take as long as you need to read the feedback. The next timer begins only when you choose Continue. Wrong-answer feedback has a brief reading pause.' }));
+  if (practice.phase === 'ready') {
+    intro.append(element('h2', { text: 'Ready when you are' }),
+      element('p', { text: state.progress.campaign.cleared.every(Boolean)
+        ? 'Campaign complete. Return to the map to enter endless mode.'
+        : 'The real timer starts when you begin the fight.' }),
+      element('div', { className: 'actions' },
+        !state.progress.campaign.cleared.every(Boolean) && button('Begin real fight', () => startBattle('campaign', true), 'primary'),
+        button('Back to campaign', () => show('map'), 'quiet')));
+  } else if (practice.phase === 'intro') {
+    intro.append(element('div', { className: 'actions' },
+      button('Try untimed practice', () => { state.practice.phase = 'question'; show('practice'); }, 'primary'),
+      button('Skip practice', finishPractice, 'quiet')));
+  } else {
+    intro.append(element('h2', { text: 'A tool reviews source code before the application runs. Which test is this?' }));
+    const answers = element('div', { className: 'answers' });
+    ['SAST', 'DAST', 'Container image scanning', 'Secrets scanning'].forEach((text, choice) => {
+      answers.append(button(text, () => answerPractice(choice), 'answer'));
+    });
+    intro.append(answers);
+    if (practice.correct !== null) {
+      intro.append(element('div', { className: 'panel feedback ' + (practice.correct ? '' : 'wrong'), attrs: { role: 'status' } },
+        element('h2', { text: practice.correct ? 'Correct: SAST' : 'Try again. Look at what the tool inspects.' }),
+        element('p', { text: 'SAST examines source code without running the application. Example: a rule finds unsafe SQL string concatenation in a pull request. DAST sends requests to a running application. Container scanning examines packaged components; secrets scanning looks for exposed credentials.' })));
+    }
+    intro.append(element('div', { className: 'actions' },
+      practice.correct && button('Finish practice', finishPractice, 'primary'),
+      button('Skip practice', finishPractice, 'quiet')));
+  }
+  return intro;
+}
+
+function startBattle(mode, introduced = false) {
+  if (mode === 'campaign' && !introduced && needsFirstPlay()) { openFirstPlay(); return; }
+  return perform(async () => {
+    try {
+      const battle = await api('/battles', { method: 'POST', body: { mode, replaceActive: false } });
+      state.progress = battle.progress;
+      state.battle = { ...battle, mode };
+      state.result = null;
+      show('battle');
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      await loadMap();
+      notice.textContent = 'Your saved fight and progress have been restored.';
+    }
   });
 }
 
 function submitAnswer(answer) {
-  perform(async () => {
+  return perform(async () => {
     const battle = state.battle;
     if (!battle?.question || state.result) return;
     const { id, question } = battle;
@@ -322,14 +403,14 @@ function submitAnswer(answer) {
         body: { questionId: question.id, ...answer }
       });
       state.progress = result.progress;
-      state.battle = { ...battle, enemy: result.enemy, question: result.question };
+      state.battle = { ...battle, enemy: result.enemy, question: result.question, answeredQuestionId: question.id };
       state.result = { ...result, unlockAt: performance.now() + (result.correct ? 0 : 3000) };
       show('battle');
       continueButton?.focus();
     } catch (error) {
       if (error.status !== 409 && error.status !== 404) throw error;
       await loadMap();
-      notice.textContent = 'This fight changed in another request. The map shows your saved progress.';
+      notice.textContent = 'Your saved fight and progress have been restored.';
     }
   });
 }
@@ -362,7 +443,7 @@ function renderBattle() {
       label: 'Enemy HP', hp: enemy.hp, maxHp: enemy.maxHp, enemy: true
     }));
   const consolePanel = element('section', { className: 'panel console' });
-  if (question) {
+  if (question && !result) {
     timerReadout = bar('question-time', result ? 'Next question' : 'Time remaining',
       question.timeLimitSeconds, question.timeLimitSeconds, '', 'timer');
     consolePanel.append(timerReadout.node);
@@ -445,9 +526,21 @@ function advance() {
     if (mode === 'endless') startBattle(mode);
     else perform(loadMap);
   } else {
-    state.result = null;
-    show('battle');
-    view.querySelector('#question-prompt')?.focus();
+    return perform(async () => {
+      try {
+        const { question } = await api('/battles/' + encodeURIComponent(state.battle.id) + '/advance', {
+          method: 'POST', body: { questionId: state.battle.answeredQuestionId }
+        });
+        state.battle.question = question;
+        state.result = null;
+        show('battle');
+        view.querySelector('#question-prompt')?.focus();
+      } catch (error) {
+        if (error.status !== 409 && error.status !== 404) throw error;
+        await loadMap();
+        notice.textContent = 'Your saved fight and progress have been restored.';
+      }
+    });
   }
 }
 

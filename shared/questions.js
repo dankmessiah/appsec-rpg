@@ -74,7 +74,7 @@ function generateQuestion({
     startedAt: now,
     termId: term.id,
     aliases: [...(term.aliases ?? [])],
-    explanation: term.definition,
+    explanation: term.explanation || term.definition,
     ...(recall ? { answer: term.term } : makeOptions(terms, term, variant === 'reverse' ? 'definition' : 'term', rng)),
   };
 }

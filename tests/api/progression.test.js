@@ -75,6 +75,11 @@ async function answer(player, battleId, question, timeout = false) {
     .send({ questionId: question.id, ...submission }).expect(200);
   expect(body.correct).toBe(!timeout);
   expect(body.timedOut).toBe(timeout);
+  if (body.status === 'active') {
+    const advanced = await player('post', '/battles/' + battleId + '/advance')
+      .send({ questionId: question.id }).expect(200);
+    body.question = advanced.body.question;
+  }
   return body;
 }
 
@@ -130,3 +135,36 @@ test('defeat preserves earned XP and restarts the current section at its first f
   expect(stored.body).toEqual(turn.progress);
   await startFight(player, 1, 0);
 }, 30000);
+
+
+test('five endless kills raise difficulty, concurrent forfeits record one run and retained XP', async () => {
+  const player = await register('endless_runner');
+  const { rows: [user] } = await pool.query("SELECT id FROM users WHERE username = 'endless_runner'");
+  await pool.query('UPDATE progress SET endless = $2 WHERE user_id = $1', [user.id, { unlocked: true, kills: 0, difficulty: 0 }]);
+  let outcome;
+  for (let kills = 1; kills <= 5; kills += 1) {
+    now += 60_000;
+    const { body: battle } = await player('post', '/battles').send({ mode: 'endless', replaceActive: false }).expect(201);
+    let turn = battle;
+    for (let attempt = 0; attempt < 12 && turn.question; attempt += 1) {
+      turn = await answer(player, battle.id, turn.question);
+    }
+    expect(turn.status).toBe('won');
+    expect(turn.progress.endless.kills).toBe(kills);
+    expect(turn.progress.endless.difficulty).toBe(Math.floor(kills / 5));
+    outcome = turn;
+  }
+  now += 60_000;
+  const { body: battle } = await player('post', '/battles').send({ mode: 'endless', replaceActive: false }).expect(201);
+  expect(battle.progress.endless.difficulty).toBe(1);
+  expect([18, 28]).toContain(battle.question.timeLimitSeconds);
+  const replies = await Promise.all([1, 2].map(() => player('post', '/battles/' + battle.id + '/forfeit').send({})));
+  expect(replies.map(reply => reply.status).sort()).toEqual([200, 409]);
+  const forfeited = replies.find(reply => reply.status === 200).body;
+  expect(forfeited.runSummary.kills).toBe(5);
+  expect(forfeited.progress.player.xp).toBe(outcome.progress.player.xp);
+  expect(forfeited.progress.endless).toEqual({ unlocked: true, kills: 0, difficulty: 0 });
+  const records = await pool.query('SELECT * FROM leaderboard WHERE user_id = $1', [user.id]);
+  expect(records.rowCount).toBe(1);
+  expect(records.rows[0].best_kills).toBe(5);
+});
