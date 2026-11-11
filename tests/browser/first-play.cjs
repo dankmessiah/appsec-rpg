@@ -19,13 +19,13 @@ const artifacts = process.env.FIRST_PLAY_ARTIFACT_DIR || join(tmpdir(), 'appsec-
 const pool = new Pool({ connectionString: database.href });
 const outcomes = [];
 
-async function fixture(username) {
+async function fixture(username, firstSection = false) {
   assert.ok(['bob', 'admin'].includes(username));
   const progress = createInitialProgress();
-  progress.player.xp = username === 'bob' ? 120 : 1000;
+  progress.player.xp = firstSection ? 0 : username === 'bob' ? 120 : 1000;
   const rank = getRank(progress.player.xp);
   Object.assign(progress.player, { rank: rank.name, hp: rank.maxHp, maxHp: rank.maxHp });
-  progress.campaign.fight = 6;
+  progress.campaign.fight = firstSection ? 0 : 6;
   if (username === 'admin') {
     progress.campaign.section = 6;
     progress.campaign.cleared.fill(true);
@@ -205,6 +205,65 @@ async function endlessTierForfeitLeaderboard(browser) {
   await page.close();
 }
 
+async function fullFirstSection(browser) {
+  await fixture('bob', true);
+  const page = await signIn(browser, 'bob');
+  let outcome;
+  let answered = 0;
+  for (let fight = 0; fight < 7; fight += 1) {
+    let battle;
+    if (fight === 0) {
+      await page.getByRole('button', { name: 'Start fight', exact: true }).click();
+      await page.getByRole('button', { name: 'Skip practice', exact: true }).click();
+      battle = await clickForResponse(page, 'Begin real fight', '/battles');
+    } else {
+      battle = await clickForResponse(page, fight === 6 ? 'Challenge boss' : 'Start fight', '/battles');
+    }
+    assert.equal(battle.progress.campaign.section, 0);
+    assert.equal(battle.progress.campaign.fight, fight);
+    assert.equal(battle.enemy.type, fight < 4 ? 'grunt' : fight < 6 ? 'elite' : 'boss');
+    await page.locator('#question-prompt').waitFor();
+    if ([0, 4, 6].includes(fight)) await screenshot(page, 'full-section-fight-' + (fight + 1));
+    let question = battle.question;
+    for (let turn = 0; turn < 12; turn += 1) {
+      outcome = await answer(page, question, true);
+      answered += 1;
+      if (outcome.status !== 'active') break;
+      question = (await continueFeedback(page, outcome)).question;
+    }
+    assert.equal(outcome.status, 'won');
+    assert.equal(outcome.earnedXp, fight < 4 ? 15 : fight < 6 ? 30 : 65);
+    console.log('Full section UI fight ' + (fight + 1) + ': won, XP ' + outcome.progress.player.xp);
+    if (fight === 6) {
+      assert.equal(outcome.rankUp, 'Analyst');
+      assert.equal(outcome.progress.player.xp, 185);
+      assert.equal(outcome.progress.campaign.cleared[0], true);
+      assert.equal(outcome.progress.campaign.section, 1);
+      assert.equal(outcome.progress.campaign.fight, 0);
+      assert.equal(outcome.progress.player.hp, outcome.progress.player.maxHp);
+      assert.equal(outcome.progress.player.hp, 110);
+      await page.getByText('Rank up: Analyst', { exact: true }).waitFor();
+      await screenshot(page, 'full-section-boss-clear-rank-up');
+    }
+    await continueFeedback(page, outcome, 'Back to map');
+    await page.getByRole('heading', { name: 'Campaign map' }).waitFor();
+  }
+  await page.locator('.sector.current').getByRole('heading', { name: 'Vulnerability classes', exact: true }).waitFor();
+  assert.equal(await page.locator('.sector.cleared').count(), 1);
+  assert.ok((await page.locator('.sector.current .sector-status').textContent()).includes('Fight 1 of 7'));
+  await page.getByText('HP 110 / 110', { exact: true }).waitFor();
+  await screenshot(page, 'full-section-sector-two-unlocked-map');
+  const next = await clickForResponse(page, 'Start fight', '/battles');
+  assert.equal(next.progress.campaign.section, 1);
+  assert.equal(next.progress.campaign.fight, 0);
+  assert.equal(next.progress.player.hp, 110);
+  await page.locator('#question-prompt').waitFor();
+  await screenshot(page, 'full-section-sector-two-first-question');
+  await forfeit(page);
+  await page.close();
+  outcomes.push('Bob: all seven first-section encounters won through real UI (' + answered + ' correct answers), 185 XP, boss reward 65, rank Analyst, HP110/110, sector two unlocked and its first fight started.');
+}
+
 (async () => {
   await mkdir(artifacts, { recursive: true });
   const browser = await chromium.launch({ headless: true,
@@ -212,6 +271,7 @@ async function endlessTierForfeitLeaderboard(browser) {
   try {
     await bossDefeatRetry(browser);
     await endlessTierForfeitLeaderboard(browser);
+    await fullFirstSection(browser);
     outcomes.forEach(outcome => console.log('PASS: ' + outcome));
   } finally { await browser.close(); await pool.end(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
