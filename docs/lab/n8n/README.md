@@ -26,6 +26,12 @@ Webhook ─▶ 1 Ingest ─▶ 2 Enrich ─▶ 3 Dedupe ─▶ 4 Route
 
 ## Verified evidence (2026-11-08)
 
+### Follow-up delivery inspection (2026-11-10)
+
+Direct inspection of the existing Discord message history confirmed both synthetic Critical alerts and the seeded-secret APPSEC-7 alert. The earlier two messages retain KAN-4 and KAN-5 from before the project-key rename. Wazuh finding archives independently contain all three corresponding events under rule 100901. These observations supersede the earlier limitation below that the seeded-secret Discord message had not yet been inspected. No new finding, ticket or message was created for this inspection.
+
+This written evidence records the delivery result without publishing Discord server identifiers or private dashboard details. Private configuration screenshots show the ingest, enrichment, deduplication and routing stages; those configuration views are not evidence of successful external delivery. Standalone Discord and Wazuh screenshots are not included.
+
 - A production webhook submission with two synthetic Critical findings created APPSEC-4 (fake secret) and APPSEC-5 (BOLA routing fixture). The user confirmed both Discord alerts; Wazuh rule 100901 recorded two corresponding events. Their event payloads retain the original KAN-4 and KAN-5 keys from before the Jira project-key rename.
 - One real ZAP finding from [Juice Shop calibration run 42450911928](https://github.com/dankmessiah/juice-shop/actions/runs/42450911928), plugin 10038 and its first instance only, created APPSEC-6. Verified: Medium priority, native due date 2027-02-06, descriptive owner `@juice-maintainers`, Tier 3, and 90-day SLA. This was a one-time submission, not permanent forwarding of the fork's output.
 - The published workflow maps native Jira Priority and Due date in addition to its description. The two earlier Critical tickets were corrected to Highest and 2026-11-15. Mock owners remain descriptive; Jira assignees remain unassigned.
