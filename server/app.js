@@ -44,6 +44,7 @@ function createApp({ pool, now = Date.now, authRateLimit = 10 }) {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'"],
+        fontSrc: ["'self'"],
         ...(secureCookies ? {} : { upgradeInsecureRequests: null }),
       },
     },
