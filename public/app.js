@@ -1,12 +1,12 @@
 const apiRoot = '/api/v1';
 const sections = [
-  'Testing types and tooling',
-  'Vulnerability classes',
-  'Web, auth and identity',
-  'Standards and frameworks',
-  'Risk scoring and prioritization',
-  'Supply chain and CI/CD',
-  'Program and process'
+  'Testing Types And Tooling',
+  'Vulnerability Classes',
+  'Web, Auth And Identity',
+  'Standards And Frameworks',
+  'Risk Scoring And Prioritization',
+  'Supply Chain And CI/CD',
+  'Program And Process'
 ];
 const rankThresholds = [0, 150, 400, 800, 1400];
 
@@ -76,7 +76,7 @@ function xpReadout(player) {
   const next = rankThresholds.find(threshold => threshold > player.xp);
   const lower = rankThresholds.findLast(threshold => threshold <= player.xp);
   return bar('xp', 'XP', next ? player.xp - lower : 1, next ? next - lower : 1,
-    next ? player.xp + ' / ' + next : player.xp + ' · Max rank', 'xp').node;
+    next ? player.xp + ' / ' + next : player.xp + ' · Max Rank', 'xp').node;
 }
 
 class HttpError extends Error {
@@ -109,15 +109,15 @@ async function api(path, { method = 'GET', body, protect = true } = {}) {
 
 function errorMessage(error) {
   switch (error.status) {
-    case 400: return 'Check your input and try again.';
-    case 401: return 'The username or password is incorrect.';
-    case 403: return 'This action was denied. Refresh the page if your session changed.';
-    case 404: return 'This record is unavailable.';
+    case 400: return 'Check Your Input And Try Again';
+    case 401: return 'The Username Or Password Is Incorrect';
+    case 403: return 'This Action Was Denied. Refresh The Page If Your Session Changed.';
+    case 404: return 'This Record Is Unavailable';
     case 409: return state.screen === 'auth'
-      ? 'That username or email is already in use.'
-      : 'The game state changed. Return to the campaign map and try again.';
-    case 429: return 'Too many requests. Wait a moment before trying again.';
-    default: return 'Could not complete the request. Check your connection and try again.';
+      ? 'That Username Or Email Is Already In Use'
+      : 'The Game State Changed. Return To The Campaign Map And Try Again.';
+    case 429: return 'Too Many Requests. Wait A Moment Before Trying Again.';
+    default: return 'Could Not Complete The Request. Check Your Connection And Try Again.';
   }
 }
 
@@ -140,7 +140,7 @@ async function perform(operation) {
     if (error.status === 401 && error.protectedRoute) {
       resetSession();
       show('auth');
-      notice.textContent = 'Your session has expired. Sign in to continue.';
+      notice.textContent = 'Your Session Has Expired. Sign In To Continue.';
     } else {
       notice.textContent = errorMessage(error);
     }
@@ -194,15 +194,15 @@ function renderNavigation() {
   navigation.replaceChildren();
   if (state.screen === 'battle') return;
   if (publicId) {
-    navigation.append(element('a', { text: 'Game home', className: 'action quiet', attrs: { href: '/' } }));
+    navigation.append(element('a', { text: 'Game Home', className: 'action quiet', attrs: { href: '/' } }));
   } else if (state.session) {
     navigation.append(
       button('Campaign', () => perform(loadMap), 'quiet', current('map')),
-      button('Weak spots', () => perform(async () => show('weak', await api('/weak-spots'))),
+      button('Weak Spots', () => perform(async () => show('weak', await api('/weak-spots'))),
         'quiet', current('weak'))
     );
   } else {
-    navigation.append(button('Sign in', () => {
+    navigation.append(button('Sign In', () => {
       if (state.busy) return;
       notice.textContent = '';
       show('auth');
@@ -211,7 +211,7 @@ function renderNavigation() {
   navigation.append(button('Leaderboard', () => perform(loadLeaderboard),
     'quiet', current('leaderboard')));
   if (state.session) {
-    navigation.append(button('Sign out', () => perform(async () => {
+    navigation.append(button('Sign Out', () => perform(async () => {
       await api('/auth/logout', { method: 'POST' });
       resetSession();
       show('auth');
@@ -231,12 +231,12 @@ function inputField(label, attrs) {
 function renderAuth() {
   const register = state.authMode === 'register';
   const brief = element('section', { className: 'auth-brief' },
-    heading('Defend the stack.', 'Learn application security by fighting threats across seven training sectors.', 'Operator console'),
+    heading('Defend The Stack', 'Learn Application Security By Fighting Threats Across Seven Training Sectors', 'Operator Console'),
     sprite('player_idle'));
   const card = element('section', { className: 'panel auth-card' },
-    element('h2', { text: register ? 'Create an account' : 'Operator sign-in' }));
+    element('h2', { text: register ? 'Create An Account' : 'Operator Sign-In' }));
   const form = element('form', { className: 'stack' },
-    inputField('Username', { name: 'username', autocomplete: 'username', minlength: 3, maxlength: 20, pattern: '[A-Za-z0-9_\\-]{3,20}', title: 'Use 3 to 20 letters, digits, underscores, or hyphens.' }),
+    inputField('Username', { name: 'username', autocomplete: 'username', minlength: 3, maxlength: 20, pattern: '[A-Za-z0-9_\\-]{3,20}', title: 'Use 3 To 20 Letters, Digits, Underscores, Or Hyphens' }),
     register && inputField('Email', { name: 'email', type: 'email', autocomplete: 'email', maxlength: 254 }),
     inputField('Password', {
       name: 'password',
@@ -244,8 +244,8 @@ function renderAuth() {
       autocomplete: register ? 'new-password' : 'current-password',
       ...(register ? { minlength: 12, 'aria-describedby': 'password-hint' } : {})
     }),
-    register && element('span', { className: 'hint', text: 'Use at least 12 characters.', attrs: { id: 'password-hint' } }),
-    button(register ? 'Create account' : 'Sign in', null, 'primary', { type: 'submit' })
+    register && element('span', { className: 'hint', text: 'Use At Least 12 Characters', attrs: { id: 'password-hint' } }),
+    button(register ? 'Create Account' : 'Sign In', null, 'primary', { type: 'submit' })
   );
   form.addEventListener('submit', event => {
     event.preventDefault();
@@ -261,7 +261,7 @@ function renderAuth() {
       }
     });
   });
-  const swap = button(register ? 'Sign in instead' : 'Create an account', () => {
+  const swap = button(register ? 'Sign In Instead' : 'Create An Account', () => {
     if (state.busy) return;
     state.authMode = register ? 'login' : 'register';
     notice.textContent = '';
@@ -281,14 +281,14 @@ function renderMap() {
     const available = !cleared && index === campaign.section;
     const sector = element('li', { className: 'sector ' + (cleared ? 'cleared' : available ? 'current' : 'locked') },
       element('span', { className: 'sector-number', text: String(index + 1).padStart(2, '0'), attrs: { 'aria-hidden': 'true' } }));
-    const status = cleared ? 'Cleared' : available ? 'Current sector · Fight ' + (campaign.fight + 1) + ' of 7' : 'Locked';
+    const status = cleared ? 'Cleared' : available ? 'Current Sector · Fight ' + (campaign.fight + 1) + ' Of 7' : 'Locked';
     const details = element('div', {},
       element('h2', { text: name }),
       element('span', { className: 'sector-status', text: status }));
     if (available) {
       details.append(element('div', { className: 'actions' },
-        button(campaign.fight === 6 ? 'Challenge boss' : 'Start fight', () => startBattle('campaign'), 'primary'),
-        campaign.fight === 6 && element('span', { className: 'boss-note', text: 'Boss encounter' })));
+        button(campaign.fight === 6 ? 'Challenge Boss' : 'Start Fight', () => startBattle('campaign'), 'primary'),
+        campaign.fight === 6 && element('span', { className: 'boss-note', text: 'Boss Encounter' })));
     }
     sector.append(details);
     track.append(sector);
@@ -298,17 +298,17 @@ function renderMap() {
     element('h2', { text: player.rank }),
     sprite(allCleared ? 'player_victory' : 'player_idle'),
     xpReadout(player),
-    button('Replay first-fight practice', openFirstPlay, 'quiet'),
+    button('Replay First-Fight Practice', openFirstPlay, 'quiet'),
     element('p', { className: 'measure', text: 'HP ' + player.hp + ' / ' + player.maxHp }));
   const endlessCard = element('section', { className: 'panel endless-card' },
-    element('h2', { text: 'Endless arena' }),
+    element('h2', { text: 'Endless Arena' }),
     element('p', { className: 'lede', text: endless.unlocked
-      ? 'Face random enemies. Every five kills raises the difficulty.'
-      : 'Clear all seven sectors to unlock endless runs.' }),
-    button(endless.unlocked ? 'Enter endless' : 'Endless locked', () => startBattle('endless'), 'primary',
+      ? 'Face Random Enemies. Every Five Kills Raises The Difficulty.'
+      : 'Clear All Seven Sectors To Unlock Endless Runs' }),
+    button(endless.unlocked ? 'Enter Endless' : 'Endless Locked', () => startBattle('endless'), 'primary',
       endless.unlocked ? {} : { disabled: '' }));
   return element('div', {},
-    heading('Campaign map', allCleared ? 'All seven sectors cleared.' : 'Clear each sector to advance through the campaign.'),
+    heading('Campaign Map', allCleared ? 'All Seven Sectors Cleared' : 'Clear Each Sector To Advance Through The Campaign'),
     element('div', { className: 'map-layout' }, track, element('div', { className: 'stack' }, operator, endlessCard)));
 }
 
@@ -340,22 +340,22 @@ function finishPractice() {
 function renderFirstPlay() {
   const practice = state.practice;
   const intro = element('section', { className: 'panel console practice' },
-    heading('Before your first fight', 'Practice is untimed. It does not change HP, combo, XP or campaign progress.'),
-    element('p', { text: 'Real fights have a timer for each question. Correct answers deal damage; faster answers hit harder. Wrong answers or timeouts cost HP and reset your combo.' }),
-    element('p', { text: 'Consecutive correct answers build your combo. Defeating enemies awards XP and can raise your rank. If you lose all HP or forfeit, your current section restarts at fight one. Earned XP is kept.' }),
-    element('p', { text: 'After an answer, take as long as you need to read the feedback. The next timer begins only when you choose Continue. Wrong-answer feedback has a brief reading pause.' }));
+    heading('Before Your First Fight', 'Practice Is Untimed. It Does Not Change HP, Combo, XP Or Campaign Progress.'),
+    element('p', { text: 'Real Fights Have A Timer For Each Question. Correct Answers Deal Damage; Faster Answers Hit Harder. Wrong Answers Or Timeouts Cost HP And Reset Your Combo.' }),
+    element('p', { text: 'Consecutive Correct Answers Build Your Combo. Defeating Enemies Awards XP And Can Raise Your Rank. If You Lose All HP Or Forfeit, Your Current Section Restarts At Fight One. Earned XP Is Kept.' }),
+    element('p', { text: 'After An Answer, Take As Long As You Need To Read The Feedback. The Next Timer Begins Only When You Choose Continue. Wrong-Answer Feedback Has A Brief Reading Pause.' }));
   if (practice.phase === 'ready') {
-    intro.append(element('h2', { text: 'Ready when you are' }),
+    intro.append(element('h2', { text: 'Ready When You Are' }),
       element('p', { text: state.progress.campaign.cleared.every(Boolean)
-        ? 'Campaign complete. Return to the map to enter endless mode.'
-        : 'The real timer starts when you begin the fight.' }),
+        ? 'Campaign Complete. Return To The Map To Enter Endless Mode.'
+        : 'The Real Timer Starts When You Begin The Fight' }),
       element('div', { className: 'actions' },
-        !state.progress.campaign.cleared.every(Boolean) && button('Begin real fight', () => startBattle('campaign', true), 'primary'),
-        button('Back to campaign', () => show('map'), 'quiet')));
+        !state.progress.campaign.cleared.every(Boolean) && button('Begin Real Fight', () => startBattle('campaign', true), 'primary'),
+        button('Back To Campaign', () => show('map'), 'quiet')));
   } else if (practice.phase === 'intro') {
     intro.append(element('div', { className: 'actions' },
-      button('Try untimed practice', () => { state.practice.phase = 'question'; show('practice'); }, 'primary'),
-      button('Skip practice', finishPractice, 'quiet')));
+      button('Try Untimed Practice', () => { state.practice.phase = 'question'; show('practice'); }, 'primary'),
+      button('Skip Practice', finishPractice, 'quiet')));
   } else {
     intro.append(element('h2', { text: 'A tool reviews source code before the application runs. Which test is this?' }));
     const answers = element('div', { className: 'answers' });
@@ -365,12 +365,12 @@ function renderFirstPlay() {
     intro.append(answers);
     if (practice.correct !== null) {
       intro.append(element('div', { className: 'panel feedback ' + (practice.correct ? '' : 'wrong'), attrs: { role: 'status' } },
-        element('h2', { text: practice.correct ? 'Correct: SAST' : 'Try again. Look at what the tool inspects.' }),
+        element('h2', { text: practice.correct ? 'Correct: SAST' : 'Try Again: Check What The Tool Inspects' }),
         element('p', { text: 'SAST examines source code without running the application. Example: a rule finds unsafe SQL string concatenation in a pull request. DAST sends requests to a running application. Container scanning examines packaged components; secrets scanning looks for exposed credentials.' })));
     }
     intro.append(element('div', { className: 'actions' },
-      practice.correct && button('Finish practice', finishPractice, 'primary'),
-      button('Skip practice', finishPractice, 'quiet')));
+      practice.correct && button('Finish Practice', finishPractice, 'primary'),
+      button('Skip Practice', finishPractice, 'quiet')));
   }
   return intro;
 }
@@ -387,7 +387,7 @@ function startBattle(mode, introduced = false) {
     } catch (error) {
       if (error.status !== 409) throw error;
       await loadMap();
-      notice.textContent = 'Your saved fight and progress have been restored.';
+      notice.textContent = 'Your Saved Fight And Progress Have Been Restored';
     }
   });
 }
@@ -410,7 +410,7 @@ function submitAnswer(answer) {
     } catch (error) {
       if (error.status !== 409 && error.status !== 404) throw error;
       await loadMap();
-      notice.textContent = 'Your saved fight and progress have been restored.';
+      notice.textContent = 'Your Saved Fight And Progress Have Been Restored';
     }
   });
 }
@@ -428,7 +428,7 @@ function renderBattle() {
   const { player, campaign, endless } = state.progress;
   const result = state.result;
   const pose = result?.status === 'won' ? 'victory' : result?.correct ? 'attack' : result ? 'hurt' : 'idle';
-  const battleLabel = mode === 'endless' ? 'Endless · ' + endless.kills + ' kills · Tier ' + endless.difficulty :
+  const battleLabel = mode === 'endless' ? 'Endless · ' + endless.kills + ' Kills · Tier ' + endless.difficulty :
     'Campaign · ' + sections[enemy.section];
   const top = heading(enemy.name, null, battleLabel);
   top.className = 'battle-head';
@@ -444,7 +444,7 @@ function renderBattle() {
     }));
   const consolePanel = element('section', { className: 'panel console' });
   if (question && !result) {
-    timerReadout = bar('question-time', result ? 'Next question' : 'Time remaining',
+    timerReadout = bar('question-time', result ? 'Next Question' : 'Time Remaining',
       question.timeLimitSeconds, question.timeLimitSeconds, '', 'timer');
     consolePanel.append(timerReadout.node);
   }
@@ -456,9 +456,9 @@ function renderBattle() {
   const canForfeit = !result || result.status === 'active';
   return element('div', {}, top, arena, consolePanel,
     canForfeit && element('div', { className: 'fight-controls' },
-      button('Forfeit fight', forfeit, 'quiet danger')),
+      button('Forfeit Fight', forfeit, 'quiet danger')),
     !result && mode === 'campaign' &&
-      element('p', { className: 'hint', text: 'Fight ' + (campaign.fight + 1) + ' of 7' }));
+      element('p', { className: 'hint', text: 'Fight ' + (campaign.fight + 1) + ' Of 7' }));
 }
 
 function renderQuestion(question) {
@@ -473,11 +473,11 @@ function renderQuestion(question) {
       answer.append(element('kbd', { text: choice + 1, attrs: { 'aria-hidden': 'true' } }), element('span', { text }));
       choices.append(answer);
     }
-    container.append(choices, element('p', { className: 'hint', text: 'Use keys 1 to 4 or select an answer.' }));
+    container.append(choices, element('p', { className: 'hint', text: 'Use Keys 1 To 4 Or Select An Answer' }));
   } else {
     const form = element('form', { className: 'stack' },
-      inputField('Your answer', { name: 'text', maxlength: 250, autocomplete: 'off', spellcheck: 'false' }),
-      element('div', { className: 'actions' }, button('Submit answer', null, 'primary', { type: 'submit' })));
+      inputField('Your Answer', { name: 'text', maxlength: 250, autocomplete: 'off', spellcheck: 'false' }),
+      element('div', { className: 'actions' }, button('Submit Answer', null, 'primary', { type: 'submit' })));
     form.addEventListener('submit', event => {
       event.preventDefault();
       const text = new FormData(form).get('text').trim();
@@ -489,10 +489,10 @@ function renderQuestion(question) {
 }
 
 function renderFeedback(result, mode) {
-  const title = result.timedOut ? 'Time expired' : result.correct ? 'Correct answer' : 'Incorrect answer';
+  const title = result.timedOut ? 'Time Expired' : result.correct ? 'Correct Answer' : 'Incorrect Answer';
   const damage = result.correct
-    ? result.damageDealt + ' damage dealt.'
-    : result.damageTaken + ' damage taken. Combo reset.';
+    ? result.damageDealt + ' Damage Dealt'
+    : result.damageTaken + ' Damage Taken. Combo Reset.';
   const feedback = element('div', {},
     element('div', { className: 'panel feedback ' + (result.correct ? '' : 'wrong'), attrs: { role: 'status' } },
       element('h2', { text: title }),
@@ -500,14 +500,14 @@ function renderFeedback(result, mode) {
       element('p', {}, 'Answer: ', element('strong', { text: result.correctAnswer })),
       element('p', { text: result.explanation })));
   if (result.status === 'won') {
-    feedback.append(element('p', { text: 'Enemy defeated. +' + result.earnedXp + ' XP' }));
+    feedback.append(element('p', { text: 'Enemy Defeated. +' + result.earnedXp + ' XP' }));
     if (result.rankUp) {
-      feedback.append(element('p', { text: 'Rank up: ' + state.progress.player.rank }));
+      feedback.append(element('p', { text: 'Rank Up: ' + state.progress.player.rank }));
     }
     feedback.append(xpReadout(state.progress.player));
   }
-  const label = result.status === 'lost' ? 'See run result' :
-    result.status === 'won' ? (mode === 'endless' ? 'Next enemy' : 'Back to map') : 'Continue';
+  const label = result.status === 'lost' ? 'See Run Result' :
+    result.status === 'won' ? (mode === 'endless' ? 'Next Enemy' : 'Back To Map') : 'Continue';
   continueButton = button(label, advance, 'primary', result.correct ? {} : { 'aria-disabled': 'true' });
   unlockHint = element('span', { className: 'hint' });
   feedback.append(element('div', { className: 'actions feedback-actions' }, continueButton, unlockHint));
@@ -538,7 +538,7 @@ function advance() {
       } catch (error) {
         if (error.status !== 409 && error.status !== 404) throw error;
         await loadMap();
-        notice.textContent = 'Your saved fight and progress have been restored.';
+        notice.textContent = 'Your Saved Fight And Progress Have Been Restored';
       }
     });
   }
@@ -546,7 +546,7 @@ function advance() {
 
 function forfeit() {
   if (state.busy || !state.battle) return;
-  if (!window.confirm('Forfeit this fight and restart your section or endless run?')) return;
+  if (!window.confirm('Forfeit This Fight And Restart Your Section Or Endless Run?')) return;
   perform(async () => {
     const { id, mode, enemy } = state.battle;
     try {
@@ -558,27 +558,27 @@ function forfeit() {
     } catch (error) {
       if (error.status !== 409 && error.status !== 404) throw error;
       await loadMap();
-      notice.textContent = 'This fight is no longer active. The map shows your saved progress.';
+      notice.textContent = 'This Fight Is No Longer Active. The Map Shows Your Saved Progress.';
     }
   });
 }
 
 function renderDefeat({ mode, enemy, runSummary, forfeited }) {
   const endless = mode === 'endless';
-  const title = endless ? 'Endless run complete' : forfeited ? 'Fight forfeited' : 'Operator down';
-  const description = forfeited ? 'You left the fight against ' + enemy.name + '.' : enemy.name + ' defeated your operator.';
+  const title = endless ? 'Endless Run Complete' : forfeited ? 'Fight Forfeited' : 'Operator Down';
+  const description = forfeited ? 'You Left The Fight Against ' + enemy.name : enemy.name + ' Defeated Your Operator';
   return element('section', { className: 'panel defeat' },
     heading(title, description),
     sprite('player_hurt', 'aftermath'),
-    element('p', { text: 'XP kept: ' + state.progress.player.xp }),
+    element('p', { text: 'XP Kept: ' + state.progress.player.xp }),
     endless && runSummary && statsList([
-      ['Enemies defeated', runSummary.kills],
-      ['Best streak this run', runSummary.bestStreak]
+      ['Enemies Defeated', runSummary.kills],
+      ['Best Streak This Run', runSummary.bestStreak]
     ]),
-    !endless && element('p', { className: 'muted', text: 'Your section restarts at fight 1 with full HP.' }),
+    !endless && element('p', { className: 'muted', text: 'Your Section Restarts At Fight 1 With Full HP' }),
     element('div', { className: 'actions' },
-      button(endless ? 'Start another run' : 'Retry section', () => startBattle(mode), 'primary'),
-      button('Back to map', () => perform(loadMap))));
+      button(endless ? 'Start Another Run' : 'Retry Section', () => startBattle(mode), 'primary'),
+      button('Back To Map', () => perform(loadMap))));
 }
 
 function table(headers, rows, caption) {
@@ -591,24 +591,24 @@ function table(headers, rows, caption) {
 
 function renderWeak({ terms }) {
   return element('section', {},
-    heading('Weak spots', 'Review the terms you miss most often.'),
+    heading('Weak Spots', 'Review The Terms You Miss Most Often'),
     terms.length
       ? table(['Term', 'Sector', 'Correct', 'Wrong', 'Definition'], terms.slice(0, 15).map(term => [
         term.term, sections[term.section], term.correct, term.wrong, term.definition
-      ]), 'Weak spots table')
-      : element('p', { text: 'Missed terms will appear here after your battles.' }));
+      ]), 'Weak Spots Table')
+      : element('p', { text: 'Missed Terms Will Appear Here After Your Battles' }));
 }
 
 function renderLeaderboard({ entries }) {
   return element('section', {},
-    heading('Endless leaderboard', 'Top operators ranked by their best endless runs.'),
+    heading('Endless Leaderboard', 'Top Operators Ranked By Their Best Endless Runs'),
     entries.length
-      ? table(['Place', 'Operator', 'Rank', 'Best kills', 'Best streak'], entries.slice(0, 20).map((entry, index) => [
+      ? table(['Place', 'Operator', 'Rank', 'Best Kills', 'Best Streak'], entries.slice(0, 20).map((entry, index) => [
         index + 1,
         element('a', { text: entry.username, attrs: { href: '/?player=' + encodeURIComponent(entry.userId) } }),
         entry.rank, entry.bestKills, entry.bestStreak
-      ]), 'Endless leaderboard table')
-      : element('p', { text: 'No endless runs have been recorded yet.' }));
+      ]), 'Endless Leaderboard Table')
+      : element('p', { text: 'No Endless Runs Have Been Recorded Yet' }));
 }
 
 function statsList(stats) {
@@ -618,23 +618,23 @@ function statsList(stats) {
 
 function renderPublic({ username, rank, bestKills, sectionsCleared }) {
   return element('section', {},
-    heading(username, null, 'Public operator record'),
-    statsList([['Rank', rank], ['Best endless kills', bestKills], ['Sectors cleared', sectionsCleared + ' / 7']]),
-    button('Back to leaderboard', () => perform(loadLeaderboard)));
+    heading(username, null, 'Public Operator Record'),
+    statsList([['Rank', rank], ['Best Endless Kills', bestKills], ['Sectors Cleared', sectionsCleared + ' / 7']]),
+    button('Back To Leaderboard', () => perform(loadLeaderboard)));
 }
 
 function updateClocks() {
   if (timerReadout && state.battle?.question) {
     const { startedAt, timeLimitSeconds } = state.battle.question;
     const remaining = Math.min(timeLimitSeconds, Math.max(0, timeLimitSeconds - (Date.now() - startedAt) / 1000));
-    const label = remaining > 0 ? Math.ceil(remaining) + 's' : '0s · expired';
+    const label = remaining > 0 ? Math.ceil(remaining) + 's' : '0s · Expired';
     timerReadout.meter.value = remaining;
     timerReadout.meter.classList.toggle('warning', remaining <= 5);
     if (timerReadout.text.textContent !== label) timerReadout.text.textContent = label;
   }
   if (continueButton && state.result) {
     const delay = Math.max(0, Math.ceil((state.result.unlockAt - performance.now()) / 1000));
-    const label = delay > 0 ? 'Available in ' + delay + 's' : 'Enter to continue';
+    const label = delay > 0 ? 'Available In ' + delay + 's' : 'Enter To Continue';
     if (delay === 0) continueButton.removeAttribute('aria-disabled');
     if (unlockHint.textContent !== label) unlockHint.textContent = label;
   }
@@ -674,8 +674,8 @@ async function initialize() {
 function showLoadError(retry) {
   state.screen = 'loading';
   view.replaceChildren(
-    heading('Game unavailable', 'Check your connection or open the leaderboard.'),
-    button('Try again', () => perform(retry), 'primary'),
+    heading('Game Unavailable', 'Check Your Connection Or Open The Leaderboard'),
+    button('Try Again', () => perform(retry), 'primary'),
     button('Leaderboard', () => perform(loadLeaderboard), 'quiet')
   );
   renderNavigation();
