@@ -44,3 +44,15 @@ test('the full glossary spans seven sections and 25 reciprocal drill groups', ()
   assert.deepEqual(byGroup.get('cvss-epss-kev').term_ids, ['cvss', 'epss', 'cisa-kev']);
   assert.deepEqual(byGroup.get('asvs-samm-ssdf').term_ids, ['owasp-asvs-5-0', 'owasp-samm-v2', 'nist-ssdf']);
 });
+
+
+test('every sector-zero answer has distinct teaching feedback and a concrete example', () => {
+  const terms = require('../../db/terms.json');
+  const { generateQuestion } = require('../../shared/questions');
+  for (const term of terms.filter(item => item.section === 0)) {
+    assert.ok(term.explanation && term.explanation.includes('Example:'), term.id);
+    assert.notEqual(term.explanation, term.definition);
+    const question = generateQuestion({ terms: [term, ...terms.filter(item => item.section !== 0)], section: 0, mode: 'campaign', now: 0, rng: () => .6 });
+    assert.equal(question.explanation, term.explanation);
+  }
+});

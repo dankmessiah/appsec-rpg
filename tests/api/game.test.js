@@ -260,6 +260,11 @@ test('records an endless timeout loss, resets the run, and exposes only best sco
       progress: { endless: { kills: 0, difficulty: 0, unlocked: true } },
     });
     expect(body.progress.player.hp).toBe(body.progress.player.maxHp);
+    const saved = (await pool.query('SELECT * FROM progress WHERE user_id = $1', [bob.user.id])).rows;
+    await mutate(bob, 'post', '/battles/' + battle.id + '/answer').send(submission).expect(409);
+    await mutate(bob, 'post', '/battles/' + battle.id + '/forfeit').send({}).expect(409);
+    expect((await pool.query('SELECT * FROM progress WHERE user_id = $1', [bob.user.id])).rows).toEqual(saved);
+    expect((await pool.query('SELECT * FROM leaderboard WHERE user_id = $1', [bob.user.id])).rowCount).toBe(1);
   } finally {
     now = originalTime;
   }
@@ -283,3 +288,131 @@ test('repeat seeding preserves the original password hashes, progress, and users
   );
   expect(reseeded.rows).toEqual(saved.rows);
 });
+
+
+test('feedback dwell waits for explicit advance, retries preserve the deadline and reject stale or foreign requests', async () => {
+  now += 60_000;
+  const { body: battle } = await mutate(alice, 'post', '/battles').send({ mode: 'campaign' }).expect(201);
+  const path = '/battles/' + battle.id;
+  const { rows: [saved] } = await pool.query('SELECT question FROM battles WHERE id = $1', [battle.id]);
+  const submission = { questionId: battle.question.id, choice: saved.question.answer };
+  const { body: feedback } = await mutate(alice, 'post', path + '/answer').send(submission).expect(200);
+  expect(feedback.status).toBe('active');
+  expect(feedback.question).toBeNull();
+  await mutate(alice, 'post', path + '/answer').send(submission).expect(409);
+  now += 120_000;
+  await mutate(bob, 'post', path + '/advance').send({ questionId: battle.question.id }).expect(403);
+  await api.post('/api/v1' + path + '/advance').set('Cookie', alice.cookie).send({ questionId: battle.question.id }).expect(403);
+  await mutate(alice, 'post', path + '/advance').send({ questionId: randomUUID() }).expect(409);
+  const replies = await Promise.all([1, 2].map(() => mutate(alice, 'post', path + '/advance').send({ questionId: battle.question.id }).expect(200)));
+  const question = replies[0].body.question;
+  expect(replies[1].body.question).toEqual(question);
+  expect(question.startedAt).toBe(now);
+  expect(question).not.toHaveProperty('answer');
+  expect(question).not.toHaveProperty('explanation');
+  expect(question).not.toHaveProperty('aliases');
+  now += 5000;
+  const retry = await mutate(alice, 'post', path + '/advance').send({ questionId: battle.question.id }).expect(200);
+  expect(retry.body.question).toEqual(question);
+  await mutate(alice, 'post', path + '/advance').send({ questionId: question.id }).expect(409);
+  const { rows: [next] } = await pool.query('SELECT question FROM battles WHERE id = $1', [battle.id]);
+  await mutate(alice, 'post', path + '/answer').send({ questionId: question.id, choice: next.question.answer }).expect(200);
+  await mutate(alice, 'post', path + '/advance').send({ questionId: battle.question.id }).expect(409);
+});
+
+test('additive first-play migration enriches built-in feedback and preserves users, history and custom content on rerun', async () => {
+  const { migrateFirstPlay } = require('../../db/migrate-first-play');
+  await pool.query('ALTER TABLE terms DROP COLUMN explanation');
+  await pool.query('ALTER TABLE battles DROP COLUMN awaiting_advance, DROP COLUMN advanced_from');
+  const battles = await pool.query('SELECT * FROM battles ORDER BY id');
+  const before = await pool.query('SELECT * FROM progress ORDER BY user_id');
+  const users = await pool.query('SELECT * FROM users ORDER BY id');
+  const history = await pool.query('SELECT * FROM term_stats ORDER BY user_id, term_id');
+  await pool.query("UPDATE terms SET definition = 'custom definition' WHERE id = 'sast'");
+  await pool.query("INSERT INTO terms (id,section,term,aliases,definition,drill_group_ids) VALUES ('custom-kept',0,'Custom', '{}','Custom definition','{}')");
+  await migrateFirstPlay(pool);
+  await migrateFirstPlay(pool);
+  expect((await pool.query('SELECT * FROM progress ORDER BY user_id')).rows).toEqual(before.rows);
+  expect((await pool.query('SELECT * FROM users ORDER BY id')).rows).toEqual(users.rows);
+  expect((await pool.query('SELECT * FROM term_stats ORDER BY user_id, term_id')).rows).toEqual(history.rows);
+  const { rows: [term] } = await pool.query("SELECT * FROM terms WHERE id = 'sast'");
+  expect(term.definition).toBe('custom definition');
+  expect(term.explanation).toBeNull();
+  expect((await pool.query("SELECT explanation FROM terms WHERE id = 'dast'")).rows[0].explanation).toContain('Example:');
+  expect((await pool.query('SELECT id, question, started_at FROM battles ORDER BY id')).rows)
+    .toEqual(battles.rows.map(({ id, question, started_at }) => ({ id, question, started_at })));
+  await pool.query("UPDATE terms SET explanation = 'Custom teaching note' WHERE id = 'dast'");
+  await migrateFirstPlay(pool);
+  expect((await pool.query("SELECT explanation FROM terms WHERE id = 'dast'")).rows[0].explanation).toBe('Custom teaching note');
+  expect((await pool.query("SELECT definition FROM terms WHERE id = 'custom-kept'")).rows[0].definition).toBe('Custom definition');
+});
+
+
+test('current battle restores unanswered deadlines or resolved feedback without leaks, mutations or cross-owner access', async () => {
+  now += 60_000;
+  const registered = await api.post('/api/v1/auth/register').send({ username: 'recovery_test', email: 'recovery@example.test', password: 'recovery-password-for-tests' }).expect(201);
+  const owner = { cookie: registered.headers['set-cookie'][0].split(';')[0], csrf: registered.body.csrfToken };
+  await api.get('/api/v1/battles/current').expect(401);
+  const { body: battle } = await mutate(owner, 'post', '/battles').send({ mode: 'campaign' }).expect(201);
+  const current = () => api.get('/api/v1/battles/current').set('Cookie', owner.cookie).expect(200);
+  const first = (await current()).body.battle;
+  expect(first.id).toBe(battle.id);
+  expect(first.question).toEqual(battle.question);
+  expect(first.result).toBeNull();
+  expect(first.question).not.toHaveProperty('answer');
+  expect(first.question).not.toHaveProperty('explanation');
+  const foreign = await api.get('/api/v1/battles/current').set('Cookie', bob.cookie).expect(200);
+  expect(foreign.body.battle?.id).not.toBe(battle.id);
+  now += 5000;
+  expect((await current()).body.battle.question).toEqual(battle.question);
+  const { rows: [saved] } = await pool.query('SELECT question FROM battles WHERE id = $1', [battle.id]);
+  const submission = { questionId: battle.question.id, choice: saved.question.answer };
+  const { body: feedback } = await mutate(owner, 'post', '/battles/' + battle.id + '/answer').send(submission).expect(200);
+  await mutate(owner, 'post', '/battles/' + battle.id + '/answer').send(submission).expect(409);
+  expect(feedback.status).toBe('active');
+  now += 120_000;
+  const recovered = (await current()).body.battle;
+  expect(recovered.result).toEqual(feedback);
+  expect(recovered.question).toBeNull();
+  expect(recovered.answeredQuestionId).toBe(battle.question.id);
+  const { body: next } = await mutate(owner, 'post', '/battles/' + battle.id + '/advance').send({ questionId: recovered.answeredQuestionId }).expect(200);
+  const active = (await current()).body.battle;
+  expect(active.question).toEqual(next.question);
+  expect(active.result).toBeNull();
+  expect(active.question).not.toHaveProperty('answer');
+  await mutate(owner, 'post', '/battles/' + battle.id + '/forfeit').send({}).expect(200);
+  expect((await current()).body.battle).toBeNull();
+});
+
+
+test('admin no-op and drill-group-only edits preserve existing teaching feedback', async () => {
+  const { explanation, ...term } = require('../../db/terms.json').find(term => term.id === 'sca');
+  try {
+    const noop = await mutate(admin, 'put', '/admin/terms/sca').send(term).expect(200);
+    expect(noop.body.explanation).toBe(explanation);
+    const groups = term.drill_group_ids.length ? [] : [require('../../db/drill-groups.json')[0].id];
+    const grouped = await mutate(admin, 'put', '/admin/terms/sca').send({ ...term, drill_group_ids: groups }).expect(200);
+    expect(grouped.body.explanation).toBe(explanation);
+  } finally {
+    await mutate(admin, 'put', '/admin/terms/sca').send(term).expect(200);
+  }
+});
+
+test.each(['section', 'term', 'aliases', 'definition', 'scenario'])(
+  'admin editing a built-in %s invalidates obsolete teaching feedback and uses definition fallback', async field => {
+    const { explanation, ...term } = require('../../db/terms.json').find(term => term.id === 'sca');
+    const replacements = { section: 1, term: 'Custom package analysis', aliases: ['Custom analysis'],
+      definition: 'Custom dependency review definition.', scenario: 'A customized review process evaluates packages.' };
+    try {
+      const updated = await mutate(admin, 'put', '/admin/terms/sca').send({ ...term, [field]: replacements[field] }).expect(200);
+      expect(updated.body.explanation).toBeNull();
+      const { generateQuestion } = require('../../shared/questions');
+      const terms = [updated.body, ...require('../../db/terms.json').filter(item => item.section !== updated.body.section && item.id !== 'sca')];
+      const question = generateQuestion({ terms, section: updated.body.section, mode: 'campaign', now: 0, rng: () => .6 });
+      expect(question.explanation).toBe(updated.body.definition);
+    } finally {
+      await mutate(admin, 'put', '/admin/terms/sca').send(term).expect(200);
+      await pool.query("UPDATE terms SET explanation = $1 WHERE id = 'sca'", [explanation]);
+    }
+  },
+);

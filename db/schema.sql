@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS terms (
     aliases text[] NOT NULL,
     definition text NOT NULL,
     scenario text,
+    explanation text,
     drill_group_ids text[] NOT NULL,
     is_top25 boolean GENERATED ALWAYS AS (cardinality(drill_group_ids) > 0) STORED
 );
@@ -56,6 +57,9 @@ CREATE TABLE IF NOT EXISTS battles (
     mode text NOT NULL CHECK (mode IN ('campaign', 'endless')),
     enemy jsonb NOT NULL,
     question jsonb NOT NULL,
+    awaiting_advance boolean NOT NULL DEFAULT false,
+    advanced_from uuid,
+    last_feedback jsonb,
     no_damage boolean NOT NULL DEFAULT true,
     status text NOT NULL CHECK (status IN ('active', 'won', 'lost', 'forfeit')),
     started_at timestamptz NOT NULL DEFAULT now(),
