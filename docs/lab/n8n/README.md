@@ -26,6 +26,14 @@ Webhook ─▶ 1 Ingest ─▶ 2 Enrich ─▶ 3 Dedupe ─▶ 4 Route
 
 ## Verified evidence (2026-11-08)
 
+### Stage and Jira captures
+
+- [Ingest](../screenshots/2-1-ingest.png) and [enrichment](../screenshots/2-2-enrich.png) show the historical configuration canvas, not execution results.
+- [Deduplication](../screenshots/2-3-dedupe.png) shows the historical draft canvas with the historical-key node expanded. Its Publish button is not proof of live publication, and the image predates the later same-input deduplication repair.
+- [Synthetic Jira ticket APPSEC-4](../screenshots/2-4-jira.png) shows the authorized fake-secret routing result, descriptive owner, native Highest priority and November 15, 2026 due date. Its example commit and run link are fixture data, not a real secret finding.
+
+The routing canvas is omitted because it exposes private infrastructure details. Its configuration routes all findings to Jira and Critical findings onward to Discord and Wazuh; the direct delivery observations below provide the result evidence. The handoff permits written evidence when a capture cannot be cleanly redacted. These four images are unaltered captures and do not prove the current workflow version.
+
 ### Follow-up delivery inspection (2026-11-10)
 
 Direct inspection of the existing Discord message history confirmed both synthetic Critical alerts and the seeded-secret APPSEC-7 alert. The earlier two messages retain KAN-4 and KAN-5 from before the project-key rename. Wazuh finding archives independently contain all three corresponding events under rule 100901. These observations supersede the earlier limitation below that the seeded-secret Discord message had not yet been inspected. No new finding, ticket or message was created for this inspection.
