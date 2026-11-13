@@ -50,8 +50,8 @@ async function signIn(browser, username) {
   await page.goto(preview.href);
   await page.getByLabel('Username').fill(username);
   await page.getByLabel('Password').fill(username + '-password-for-tests');
-  await page.locator('#view').getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.getByRole('heading', { name: 'Campaign map' }).waitFor();
+  await page.locator('#view').getByRole('button', { name: 'Sign In', exact: true }).click();
+  await page.getByRole('heading', { name: 'Campaign Map' }).waitFor();
   return page;
 }
 
@@ -91,7 +91,7 @@ async function answer(page, question, correct) {
     await page.locator('.answer').nth(correct ? expected : (expected + 1) % 4).click();
   } else {
     await page.getByLabel('Your answer').fill(correct ? expected : 'deliberately-wrong-test-answer');
-    await page.getByRole('button', { name: 'Submit answer', exact: true }).click();
+    await page.getByRole('button', { name: 'Submit Answer', exact: true }).click();
   }
   const reply = await response;
   assert.equal(reply.status(), 200);
@@ -110,7 +110,7 @@ async function continueFeedback(page, body, label = 'Continue') {
 
 async function forfeit(page) {
   page.once('dialog', dialog => dialog.accept());
-  return clickForResponse(page, 'Forfeit fight', '/forfeit');
+  return clickForResponse(page, 'Forfeit Fight', '/forfeit');
 }
 
 async function bossDefeatRetry(browser) {
@@ -118,7 +118,7 @@ async function bossDefeatRetry(browser) {
   for (let attempt = 0; attempt < 4 && !completed; attempt += 1) {
     await fixture('bob');
     const page = await signIn(browser, 'bob');
-    const battle = await clickForResponse(page, 'Challenge boss', '/battles');
+    const battle = await clickForResponse(page, 'Challenge Boss', '/battles');
     assert.equal(battle.enemy.type, 'boss');
     assert.equal(battle.progress.campaign.fight, 6);
     let question = battle.question;
@@ -146,11 +146,11 @@ async function bossDefeatRetry(browser) {
       question = (await continueFeedback(page, body)).question;
     }
     assert.equal(body.status, 'lost');
-    await continueFeedback(page, body, 'See run result');
-    await page.getByRole('heading', { name: 'Operator down' }).waitFor();
-    assert.equal(await page.getByText('XP kept: 120', { exact: true }).count(), 1);
+    await continueFeedback(page, body, 'See Run Result');
+    await page.getByRole('heading', { name: 'Operator Down' }).waitFor();
+    assert.equal(await page.getByText('XP Kept: 120', { exact: true }).count(), 1);
     await screenshot(page, 'boss-defeat');
-    const retry = await clickForResponse(page, 'Retry section', '/battles');
+    const retry = await clickForResponse(page, 'Retry Section', '/battles');
     assert.equal(retry.progress.campaign.fight, 0);
     assert.equal(retry.progress.player.hp, retry.progress.player.maxHp);
     assert.equal(retry.progress.player.xp, 120);
@@ -169,7 +169,7 @@ async function bossDefeatRetry(browser) {
 async function endlessTierForfeitLeaderboard(browser) {
   await fixture('admin');
   const page = await signIn(browser, 'admin');
-  const battle = await clickForResponse(page, 'Enter endless', '/battles');
+  const battle = await clickForResponse(page, 'Enter Endless', '/battles');
   assert.equal(battle.progress.endless.kills, 4);
   assert.equal(battle.progress.endless.difficulty, 0);
   let question = battle.question;
@@ -182,20 +182,20 @@ async function endlessTierForfeitLeaderboard(browser) {
   assert.equal(body.status, 'won');
   assert.equal(body.progress.endless.kills, 5);
   assert.equal(body.progress.endless.difficulty, 1);
-  await page.getByText(/Endless.*5 kills.*Tier 1/).waitFor();
+  await page.getByText(/Endless.*5 Kills.*Tier 1/).waitFor();
   await screenshot(page, 'endless-fifth-kill-tier-one');
-  const next = await clickForResponse(page, 'Next enemy', '/battles');
+  const next = await clickForResponse(page, 'Next Enemy', '/battles');
   assert.ok([18, 28].includes(next.question.timeLimitSeconds));
   assert.equal(next.progress.endless.difficulty, 1);
   await screenshot(page, 'endless-tier-one-next-question');
   const ended = await forfeit(page);
-  await page.getByRole('heading', { name: 'Endless run complete' }).waitFor();
+  await page.getByRole('heading', { name: 'Endless Run Complete' }).waitFor();
   assert.equal(ended.runSummary.kills, 5);
   assert.equal(ended.progress.endless.kills, 0);
   assert.equal(ended.progress.player.xp, body.progress.player.xp);
   await screenshot(page, 'endless-forfeit-summary');
   await page.getByRole('button', { name: 'Leaderboard', exact: true }).click();
-  await page.getByRole('heading', { name: 'Endless leaderboard' }).waitFor();
+  await page.getByRole('heading', { name: 'Endless Leaderboard' }).waitFor();
   const row = page.locator('tbody tr').filter({ has: page.getByRole('link', { name: 'admin', exact: true }) });
   await row.waitFor();
   assert.equal(await row.count(), 1);
@@ -213,11 +213,11 @@ async function fullFirstSection(browser) {
   for (let fight = 0; fight < 7; fight += 1) {
     let battle;
     if (fight === 0) {
-      await page.getByRole('button', { name: 'Start fight', exact: true }).click();
-      await page.getByRole('button', { name: 'Skip practice', exact: true }).click();
-      battle = await clickForResponse(page, 'Begin real fight', '/battles');
+      await page.getByRole('button', { name: 'Start Fight', exact: true }).click();
+      await page.getByRole('button', { name: 'Skip Practice', exact: true }).click();
+      battle = await clickForResponse(page, 'Begin Real Fight', '/battles');
     } else {
-      battle = await clickForResponse(page, fight === 6 ? 'Challenge boss' : 'Start fight', '/battles');
+      battle = await clickForResponse(page, fight === 6 ? 'Challenge Boss' : 'Start Fight', '/battles');
     }
     assert.equal(battle.progress.campaign.section, 0);
     assert.equal(battle.progress.campaign.fight, fight);
@@ -242,18 +242,18 @@ async function fullFirstSection(browser) {
       assert.equal(outcome.progress.campaign.fight, 0);
       assert.equal(outcome.progress.player.hp, outcome.progress.player.maxHp);
       assert.equal(outcome.progress.player.hp, 110);
-      await page.getByText('Rank up: Analyst', { exact: true }).waitFor();
+      await page.getByText('Rank Up: Analyst', { exact: true }).waitFor();
       await screenshot(page, 'full-section-boss-clear-rank-up');
     }
-    await continueFeedback(page, outcome, 'Back to map');
-    await page.getByRole('heading', { name: 'Campaign map' }).waitFor();
+    await continueFeedback(page, outcome, 'Back To Map');
+    await page.getByRole('heading', { name: 'Campaign Map' }).waitFor();
   }
-  await page.locator('.sector.current').getByRole('heading', { name: 'Vulnerability classes', exact: true }).waitFor();
+  await page.locator('.sector.current').getByRole('heading', { name: 'Vulnerability Classes', exact: true }).waitFor();
   assert.equal(await page.locator('.sector.cleared').count(), 1);
-  assert.ok((await page.locator('.sector.current .sector-status').textContent()).includes('Fight 1 of 7'));
+  assert.ok((await page.locator('.sector.current .sector-status').textContent()).includes('Fight 1 Of 7'));
   await page.getByText('HP 110 / 110', { exact: true }).waitFor();
   await screenshot(page, 'full-section-sector-two-unlocked-map');
-  const next = await clickForResponse(page, 'Start fight', '/battles');
+  const next = await clickForResponse(page, 'Start Fight', '/battles');
   assert.equal(next.progress.campaign.section, 1);
   assert.equal(next.progress.campaign.fight, 0);
   assert.equal(next.progress.player.hp, 110);

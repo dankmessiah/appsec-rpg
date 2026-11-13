@@ -65,8 +65,8 @@ test('completed campaign practice replay offers map return without an invalid re
     button = text => ({ text }); heading = text => ({ text });
     state.progress.campaign.cleared = [true, true, true, true, true, true, true];
     openFirstPlay(); finishPractice();`);
-  expect(run('JSON.stringify(renderFirstPlay())')).not.toContain('Begin real fight');
-  expect(run('JSON.stringify(renderFirstPlay())')).toContain('Back to campaign');
+  expect(run('JSON.stringify(renderFirstPlay())')).not.toContain('Begin Real Fight');
+  expect(run('JSON.stringify(renderFirstPlay())')).toContain('Back To Campaign');
 });
 
 
