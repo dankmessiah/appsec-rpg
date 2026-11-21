@@ -1,4 +1,4 @@
-FROM node:22-alpine3.24 AS node-base
+FROM node:26-alpine3.24 AS node-base
 RUN apk upgrade --no-cache \
     && npm install --global --ignore-scripts --cache /tmp/npm-cache npm@11.21.2 \
     && rm -rf /tmp/npm-cache
