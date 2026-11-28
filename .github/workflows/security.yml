@@ -98,7 +98,7 @@ jobs:
         run: .github/scripts/sarif-summary.sh semgrep.sarif Semgrep >> "$GITHUB_STEP_SUMMARY"
       - name: Upload SARIF to Security tab
         if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('semgrep.sarif') != ''
-        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           sarif_file: semgrep.sarif
           category: semgrep
@@ -156,7 +156,7 @@ jobs:
         run: .github/scripts/sarif-summary.sh gitleaks.sarif Gitleaks >> "$GITHUB_STEP_SUMMARY"
       - name: Upload SARIF to Security tab
         if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('gitleaks.sarif') != ''
-        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           sarif_file: gitleaks.sarif
           category: gitleaks
@@ -190,13 +190,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+      - uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           languages: javascript-typescript
           build-mode: none
           queries: security-extended
       - name: Analyze
-        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           category: codeql-js
           upload: ${{ (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && 'always' || 'never' }}
@@ -310,13 +310,13 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload fs SARIF
         if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('trivy-fs.sarif') != ''
-        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
       - name: Upload config SARIF
         if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('trivy-config.sarif') != ''
-        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           sarif_file: trivy-config.sarif
           category: trivy-config
@@ -432,7 +432,7 @@ jobs:
         run: .github/scripts/sarif-summary.sh trivy-image.sarif "Trivy image" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload SARIF
         if: always() && (github.event.repository.private == false || vars.CODE_SCANNING_ENABLED == 'true') && hashFiles('trivy-image.sarif') != ''
-        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
         with:
           sarif_file: trivy-image.sarif
           category: trivy-image
